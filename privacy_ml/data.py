@@ -241,7 +241,9 @@ def load_kaggle_origins(base_dir: Path) -> np.ndarray:
         for class_name, _ in KAGGLE_CLASS_DIRS:
             class_dir = resolved / subdir / class_name
             if not class_dir.is_dir():
-                continue
+                raise FileNotFoundError(
+                    f"Expected directory not found: {class_dir}"
+                )
             n_images = sum(
                 1 for p in class_dir.iterdir()
                 if p.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES
