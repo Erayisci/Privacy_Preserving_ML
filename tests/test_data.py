@@ -15,6 +15,8 @@ import pytest
 
 from privacy_ml.data import (
     EXPECTED_TOTAL,
+    KAGGLE_CLASS_DIRS,
+    KAGGLE_SUBDIRS,
     NORMAL_LABEL,
     PNEUMONIA_LABEL,
     SHADOW_POOL_SIZE,
@@ -22,6 +24,7 @@ from privacy_ml.data import (
     VICTIM_NONMEMBERS_SIZE,
     build_shadow_splits,
     class_balance,
+    resolve_kaggle_base,
     split_pool_indices,
 )
 
@@ -215,3 +218,24 @@ def test_shadow_oversize_raises_value_error() -> None:
             holdout_size=2000,
             seed=_SPLIT_SEED,
         )
+
+
+def _materialize_kaggle_layout(root):
+    for subdir in KAGGLE_SUBDIRS:
+        for class_name, _ in KAGGLE_CLASS_DIRS:
+            (root / subdir / class_name).mkdir(parents=True)
+
+
+def test_resolve_kaggle_base_handles_flat_layout(tmp_path):
+    _materialize_kaggle_layout(tmp_path)
+    assert resolve_kaggle_base(tmp_path) == tmp_path
+
+
+def test_resolve_kaggle_base_handles_nested_layout(tmp_path):
+    _materialize_kaggle_layout(tmp_path / "chest_xray")
+    assert resolve_kaggle_base(tmp_path) == tmp_path / "chest_xray"
+
+
+def test_resolve_kaggle_base_raises_when_neither_layout_present(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        resolve_kaggle_base(tmp_path)

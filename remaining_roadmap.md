@@ -11,14 +11,14 @@ Phase B: Parallel implementation (everyone unblocked)
   3. [Egehan]      Step 3–5: attacks, metrics, runner, CLI
   4. [Onur]        DP module        → privacy_ml/ppt/dp.py
   5. [Eray]        BIE module       → privacy_ml/ppt/bie.py
-  6. [SMPC owner]  SMPC module      → privacy_ml/ppt/smpc.py
-  7. [Recon owner] Reconstruction attack → separate module
+  6. [İrem Damla]  SMPC module      → privacy_ml/ppt/smpc.py
+  7. [İlmay]       Reconstruction attack → reconstruction_attack.ipynb (already scaffolded)
   8. [All]         Lit-review paragraphs in conference_101719.tex
 
 Phase C: Integration & experiments
-  9.  [Egehan]      Run 8 canonical configs on Colab → results/runs.jsonl
-  10. [Recon owner] Run reconstruction evals in parallel
-  11. [Egehan]      Generate Results table + figures
+  9.  [Egehan] Run 8 canonical configs on Colab → results/runs.jsonl
+  10. [İlmay]  Run reconstruction evals in parallel
+  11. [Egehan] Generate Results table + figures
 
 Phase D: Paper
   12. [All] Methods + Results + Discussion sections
@@ -52,8 +52,8 @@ After Step 2 lands, each teammate pulls `main` and:
 
 - **Onur (DP)** — create `privacy_ml/ppt/dp.py` implementing the `PrivacyMechanism` Protocol with `layer="embedding"`; `apply(X)` adds Laplace noise to 128-d vectors, calibrated by an `epsilon` passed at construction.
 - **Eray (BIE)** — create `privacy_ml/ppt/bie.py` with `layer="image"`; `apply(X)` tile-shuffles 150×150×1 images with a secret-key-derived permutation.
-- **SMPC owner** — create `privacy_ml/ppt/smpc.py` with `layer="embedding"`; `apply(X)` produces an additive 2-share secret split + reconstruction of 128-d vectors.
-- **Reconstruction attack owner** — separate module (not under `ppt/`); takes a trained encoder + a set of embeddings and trains a decoder to recover images.
+- **İrem Damla (SMPC)** — create `privacy_ml/ppt/smpc.py` with `layer="embedding"`; `apply(X)` produces an additive 2-share secret split + reconstruction of 128-d vectors.
+- **İlmay (reconstruction)** — already building `reconstruction_attack.ipynb` against `privacy_ml.models`. Needs to coordinate with Egehan once the cache layer lands (so her decoder trains on the same embeddings the MIA sees).
 - **All** — start lit-review paragraphs.
 
 ## Message to paste in the team chat
