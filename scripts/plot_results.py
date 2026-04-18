@@ -91,8 +91,10 @@ def plot_reconstruction(records: Dict[str, dict], out_path: Path) -> None:
     bars = ax.bar(tags, psnr, color=colors, edgecolor="black", linewidth=0.5)
 
     baseline_psnr = records["baseline"]["reconstruction"]["psnr"]
-    ax.axhline(baseline_psnr, color="gray", linestyle="--", linewidth=0.8,
-               label=f"Baseline PSNR ({baseline_psnr:.1f} dB)")
+    baseline_line = ax.axhline(
+        baseline_psnr, color="gray", linestyle="--", linewidth=1.0,
+        label=f"Baseline PSNR ({baseline_psnr:.1f} dB)",
+    )
 
     for bar, value in zip(bars, psnr):
         ax.annotate(f"{value:.1f}",
@@ -102,17 +104,24 @@ def plot_reconstruction(records: Dict[str, dict], out_path: Path) -> None:
 
     ax.set_ylabel("Reconstruction PSNR (dB)  —  lower = stronger defense")
     ax.set_title("Reconstruction Attack: PSNR Per Configuration")
+    ax.set_xticks(range(len(tags)))
     ax.set_xticklabels(tags, rotation=20, ha="right")
-    legend_handles = [
-        plt.Rectangle((0, 0), 1, 1, color=DP_COLOR, label="Config includes DP"),
-        plt.Rectangle((0, 0), 1, 1, color=NO_DP_COLOR, label="No DP"),
-    ]
-    ax.legend(handles=legend_handles + ax.get_legend_handles_labels()[0],
-              loc="lower right", framealpha=0.95)
+    ax.set_ylim(0, max(psnr) * 1.15)
+
+    dp_patch = plt.Rectangle((0, 0), 1, 1, color=DP_COLOR, label="Config includes DP")
+    no_dp_patch = plt.Rectangle((0, 0), 1, 1, color=NO_DP_COLOR, label="No DP")
+    ax.legend(
+        handles=[dp_patch, no_dp_patch, baseline_line],
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=3,
+        framealpha=0.95,
+        fontsize=9,
+    )
     ax.grid(axis="y", alpha=0.3)
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=200)
+    fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
