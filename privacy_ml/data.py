@@ -145,13 +145,37 @@ def build_shadow_splits(
     return splits
 
 
+def resolve_kaggle_base(base_dir: Path) -> Path:
+    """Return the directory that directly contains train/val/test folders.
+
+    The Kaggle `chest-xray-pneumonia` zip extracts to a nested
+    `chest_xray/chest_xray/` layout, so callers passing the outer
+    `chest_xray/` path would otherwise get FileNotFoundError. This
+    helper probes both the given directory and a nested `chest_xray/`
+    child, returning whichever one actually contains the Kaggle layout.
+    """
+    probe_subdir, (probe_class, _) = KAGGLE_SUBDIRS[0], KAGGLE_CLASS_DIRS[0]
+    if (base_dir / probe_subdir / probe_class).is_dir():
+        return base_dir
+    nested = base_dir / "chest_xray"
+    if (nested / probe_subdir / probe_class).is_dir():
+        return nested
+    raise FileNotFoundError(
+        f"Could not find {probe_subdir}/{probe_class} under {base_dir} "
+        f"or its nested chest_xray/ subdirectory"
+    )
+
+
 def load_kaggle_pool(
     base_dir: Path,
     img_size: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Load every chest X-ray from a Kaggle layout into memory.
 
-    Expects base_dir/{train,val,test}/{NORMAL,PNEUMONIA}/*.{png,jpg,jpeg}.
+    Expects `<resolved>/{train,val,test}/{NORMAL,PNEUMONIA}/*.{png,jpg,jpeg}`.
+    Auto-resolves the commonly-nested `chest_xray/chest_xray/` zip layout
+    via `resolve_kaggle_base`.
+
     Images are converted to grayscale, resized to (img_size, img_size),
     and normalized to [0, 1] float32.
 
@@ -162,12 +186,14 @@ def load_kaggle_pool(
     """
     from tensorflow.keras.preprocessing.image import img_to_array, load_img
 
+    resolved = resolve_kaggle_base(base_dir)
+
     pool_X: List[np.ndarray] = []
     pool_y: List[int] = []
 
     for subdir in KAGGLE_SUBDIRS:
         for class_name, class_label in KAGGLE_CLASS_DIRS:
-            class_dir = base_dir / subdir / class_name
+            class_dir = resolved / subdir / class_name
             if not class_dir.is_dir():
                 raise FileNotFoundError(
                     f"Expected directory not found: {class_dir}"
@@ -184,7 +210,7 @@ def load_kaggle_pool(
                 pool_y.append(class_label)
 
     if not pool_X:
-        raise ValueError(f"No images found under {base_dir}")
+        raise ValueError(f"No images found under {resolved}")
 
     X = np.stack(pool_X).astype(np.float32)
     y = np.asarray(pool_y, dtype=np.int64)
