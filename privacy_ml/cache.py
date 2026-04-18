@@ -1,9 +1,9 @@
 """Encoder + embedding cache — path management and metadata I/O.
 
 Encoders are identified by a 12-hex-digit SHA-1 of their configuration.
-When the configuration changes (BIE on/off, key seed, training seed,
-epoch count, or SCHEMA_VERSION bump), the hash changes and a fresh
-encoder is trained. Stale caches become unreachable rather than being
+When the configuration changes (BIE on/off, key seed, tile size,
+training seed, epoch count, or SCHEMA_VERSION bump), the hash changes
+and a fresh encoder is trained. Stale caches become unreachable rather than being
 silently reused.
 
 This module deliberately does NOT save or load Keras models — that
@@ -40,6 +40,7 @@ class CachePaths(NamedTuple):
 def encoder_hash(
     bie_on: bool,
     bie_key_seed: int,
+    bie_tile_size: int,
     training_seed: int,
     epochs: int,
 ) -> str:
@@ -49,10 +50,19 @@ def encoder_hash(
     canonical string. Different arguments produce different hashes;
     identical arguments (in the same SCHEMA_VERSION) produce the same
     hash every time.
+
+    Parameters
+    ----------
+    bie_tile_size
+        Tile edge length for ``BlockWiseImageEncryption`` (must divide 150
+        when ``bie_on`` is True). When ``bie_on`` is False, pass ``0``
+        (ignored for training, but still part of the hash for a stable
+        call signature).
     """
     payload = (
         f"bie_on={bie_on}|"
         f"bie_key_seed={bie_key_seed}|"
+        f"bie_tile_size={bie_tile_size}|"
         f"training_seed={training_seed}|"
         f"epochs={epochs}|"
         f"schema_version={SCHEMA_VERSION}"

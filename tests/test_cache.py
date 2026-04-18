@@ -25,7 +25,11 @@ from privacy_ml.cache import (
 )
 
 _REF_CONFIG = dict(
-    bie_on=False, bie_key_seed=0, training_seed=42, epochs=10,
+    bie_on=False,
+    bie_key_seed=0,
+    bie_tile_size=0,
+    training_seed=42,
+    epochs=10,
 )
 
 
@@ -46,6 +50,7 @@ def test_encoder_hash_length_and_alphabet() -> None:
     [
         ("bie_on", True),
         ("bie_key_seed", 1),
+        ("bie_tile_size", 10),
         ("training_seed", 43),
         ("epochs", 11),
     ],

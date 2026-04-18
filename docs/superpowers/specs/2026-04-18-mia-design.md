@@ -126,9 +126,11 @@ Encoders and embeddings are cached on disk keyed by a 12-hex-digit SHA-1 of the 
 
 ```
 encoder_hash = sha1(
-    f"{bie_on}|{bie_key_seed}|{training_seed}|{epochs}|{SCHEMA_VERSION}"
+    f"{bie_on}|{bie_key_seed}|{bie_tile_size}|{training_seed}|{epochs}|{SCHEMA_VERSION}"
 )[:12]
 ```
+
+(`bie_tile_size` matches `privacy_ml.cache.encoder_hash`: use `0` when BIE is off.)
 
 Cache layout:
 

@@ -13,11 +13,11 @@
 - **Split-model architecture** (presentation slide 3):
   ```
   image (150×150×1)
-    → [BIE?]                ← image-layer PPT (Eray)
+    → [BIE?]                ← image-layer PPT (İrem Damla)
     → encoder (3-conv CNN, frozen once trained)
     → 128-d embedding
     → [DP?]                 ← embedding-layer PPT (Onur)
-    → [SMPC?]               ← embedding-layer PPT (İrem Damla)
+    → [SMPC?]               ← embedding-layer PPT (Eray)
     → head (Dense-1, sigmoid)
     → confidence ∈ [0, 1]
   ```
@@ -38,9 +38,9 @@ Phase A: Contract setup  ← DONE (Egehan, commits b6001c1..58f13f7)
 
 Phase B: Parallel implementation  ← WE ARE HERE
   3. [Egehan]      Step 3–5: attacks, metrics, runner, CLI
-  4. [Onur]        DP module        → privacy_ml/ppt/dp.py
-  5. [Eray]        SMPC module       → privacy_ml/ppt/bie.py
-  6. [İrem Damla]  BIE module      → privacy_ml/ppt/smpc.py
+  4. [Onur]        DP module         → privacy_ml/ppt/dp.py
+  5. [Eray]        SMPC module       → privacy_ml/ppt/smpc.py
+  6. [İrem Damla]  BIE module        → privacy_ml/ppt/bie.py
   7. [İlmay]       Reconstruction attack → reconstruction_attack.ipynb (already scaffolded, using privacy_ml)
   8. [All]         Lit-review paragraphs in conference_101719.tex
 
@@ -62,8 +62,7 @@ Phase D: Paper
 git clone https://github.com/Erayisci/Privacy_Preserving_ML.git
 cd Privacy_Preserving_ML
 pip install -e '.[dev]'           # deps + pytest
-pytest tests/ -v                  # 44 non-TF tests should pass on any machine;
-                                  # TF tests (tests/test_models.py) need TensorFlow installed
+pytest tests/ -v                  # ~54 tests without TF (cache, data, ppt, bie); test_models needs TensorFlow
 
 # every work session
 git pull --rebase origin main
@@ -215,13 +214,13 @@ Your notebook `reconstruction_attack.ipynb` is already using `privacy_ml` correc
    ```
    The outer or nested path both work now.
 
-2. **Load Egehan's trained encoder from cache** (once he ships the runner, Step 3):
+2. **Load Egehan's trained encoder from cache** (once he ships the runner, Step 3). Use the same `bie_tile_size` / `bie_key_seed` as `BlockWiseImageEncryption` when BIE is on (`bie_tile_size=0` when BIE is off).
    ```python
    from pathlib import Path
    import tensorflow as tf
    from privacy_ml.cache import cache_paths, encoder_hash
 
-   hash_id = encoder_hash(bie_on=False, bie_key_seed=0, training_seed=42, epochs=10)
+   hash_id = encoder_hash(bie_on=False, bie_key_seed=0, bie_tile_size=0, training_seed=42, epochs=10)
    paths = cache_paths(Path('results/cache'), hash_id)
    encoder = tf.keras.models.load_model(paths.encoder_weights)
    ```
@@ -229,7 +228,7 @@ Your notebook `reconstruction_attack.ipynb` is already using `privacy_ml` correc
 
 **Your decoder**: free architecture choice. `Dense(128) → Dense(256) → Dense(22500) → reshape(150,150,1)` is fine, or a deconvolutional setup.
 
-**Report** (spec §8): MSE, PSNR, SSIM, LPIPS, FID between reconstructed and original X-rays. Log per-config (baseline, DP, BIE, SMPC, combos).
+**Report** (paper / results table — not design spec §8, which is MIA JSONL): MSE, PSNR, SSIM, LPIPS, FID between reconstructed and original X-rays. Log per-config (baseline, DP, BIE, SMPC, combos). Slide 29 aligns with the first three; add LPIPS + FID for perceptual quality.
 
 ---
 
@@ -280,7 +279,7 @@ If the spec feels ambiguous, ping Egehan in chat before guessing.
 >
 > **Embedding boyutu**: 128-d (Dense(128, relu) çıktısı). DP ve SMPC bu 128-d vektör üzerinde çalışır. BIE ise görüntüde (150×150) tile-shuffle yapar — Kiya et al. paper'ına uygun.
 >
-> **Modülünüzü yazmaya başlayabilirsiniz**: `remaining_roadmap.md` dosyasında kendi bloğunuzu okuyun (Onur=DP, Eray=BIE, İrem Damla=SMPC, İlmay=reconstruction). Her blok: hangi dosyayı oluşturacağınız, class signature, zorunlu testler, referans paper. AI kodlama ajanınıza besleyebilirsiniz, gereksiz soru sormayacak kadar spesifik yazdım.
+> **Modülünüzü yazmaya başlayabilirsiniz**: `remaining_roadmap.md` dosyasında kendi bloğunuzu okuyun (Onur=DP, İrem Damla=BIE, Eray=SMPC, İlmay=reconstruction). Her blok: hangi dosyayı oluşturacağınız, class signature, zorunlu testler, referans paper. AI kodlama ajanınıza besleyebilirsiniz, gereksiz soru sormayacak kadar spesifik yazdım.
 >
 > **Literatür özeti**: `conference_101719.tex` içinde `\cite{bN}` stili, her paper için ~300–400 kelime.
 >
