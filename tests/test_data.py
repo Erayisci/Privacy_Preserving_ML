@@ -243,3 +243,36 @@ def test_resolve_kaggle_base_handles_nested_layout(tmp_path):
 def test_resolve_kaggle_base_raises_when_neither_layout_present(tmp_path):
     with pytest.raises(FileNotFoundError):
         resolve_kaggle_base(tmp_path)
+
+
+def test_load_kaggle_origins_matches_load_kaggle_pool_ordering(tmp_path):
+    # Build a fake Kaggle layout with known per-class counts
+    from PIL import Image
+
+    counts = {
+        ("train", "NORMAL"): 3,
+        ("train", "PNEUMONIA"): 5,
+        ("val", "NORMAL"): 1,
+        ("val", "PNEUMONIA"): 1,
+        ("test", "NORMAL"): 2,
+        ("test", "PNEUMONIA"): 4,
+    }
+    for (subdir, class_name), n in counts.items():
+        cls_dir = tmp_path / subdir / class_name
+        cls_dir.mkdir(parents=True)
+        for i in range(n):
+            Image.new("L", (10, 10)).save(cls_dir / f"img_{i:03d}.png")
+
+    from privacy_ml.data import load_kaggle_origins
+    origins = load_kaggle_origins(tmp_path)
+
+    expected = (
+        ["train"] * counts[("train", "NORMAL")]
+        + ["train"] * counts[("train", "PNEUMONIA")]
+        + ["val"]   * counts[("val", "NORMAL")]
+        + ["val"]   * counts[("val", "PNEUMONIA")]
+        + ["test"]  * counts[("test", "NORMAL")]
+        + ["test"]  * counts[("test", "PNEUMONIA")]
+    )
+    assert origins.tolist() == expected
+    assert origins.shape == (sum(counts.values()),)

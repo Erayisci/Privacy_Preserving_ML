@@ -221,3 +221,30 @@ def load_kaggle_pool(
     X = np.stack(pool_X).astype(np.float32)
     y = np.asarray(pool_y, dtype=np.int64)
     return X, y
+
+
+def load_kaggle_origins(base_dir: Path) -> np.ndarray:
+    """Return the Kaggle subdir origin for each image in load_kaggle_pool's output.
+
+    No image decoding — just directory enumeration. The returned array has the
+    same length and ordering as the (X, y) arrays produced by load_kaggle_pool,
+    so callers can zip them elementwise to know whether a sample came from
+    Kaggle's train/, val/, or test/ subdirectory.
+
+    Returns
+    -------
+    np.ndarray of shape (N,), dtype '<U5', values in {'train', 'val', 'test'}
+    """
+    resolved = resolve_kaggle_base(base_dir)
+    origins: List[str] = []
+    for subdir in KAGGLE_SUBDIRS:
+        for class_name, _ in KAGGLE_CLASS_DIRS:
+            class_dir = resolved / subdir / class_name
+            if not class_dir.is_dir():
+                continue
+            n_images = sum(
+                1 for p in class_dir.iterdir()
+                if p.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES
+            )
+            origins.extend([subdir] * n_images)
+    return np.asarray(origins, dtype="<U5")
