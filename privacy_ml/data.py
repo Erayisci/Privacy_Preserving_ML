@@ -21,9 +21,15 @@ from typing import List, NamedTuple, Tuple
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-VICTIM_MEMBERS_SIZE: int = 2000
-VICTIM_NONMEMBERS_SIZE: int = 1000
-SHADOW_POOL_SIZE: int = 2856
+# Shrunk from 2000/1000/2856 to amplify the train-test generalization gap
+# that MIA exploits. In the first v1 run, baseline yeom_acc was 0.52 (near
+# random) because the IID pooled split produced a well-generalized model.
+# Reducing victim_members forces overfitting; keeping balanced members /
+# nonmembers for MIA eval; remaining ~4856 go to the shadow pool (more
+# independent shadow draws for Shokri).
+VICTIM_MEMBERS_SIZE: int = 500
+VICTIM_NONMEMBERS_SIZE: int = 500
+SHADOW_POOL_SIZE: int = 4856
 EXPECTED_TOTAL: int = (
     VICTIM_MEMBERS_SIZE + VICTIM_NONMEMBERS_SIZE + SHADOW_POOL_SIZE
 )

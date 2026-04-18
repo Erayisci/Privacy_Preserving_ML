@@ -411,9 +411,16 @@ RUNS_JSONL = OUTPUT_DIR / "runs.jsonl"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Experiment hyperparameters ---
-EPOCHS = 10
+# Tuned for meaningful privacy/utility trade-offs:
+#   - EPOCHS=30 forces overfitting on the new 500-sample victim set
+#     (previously 10 epochs on 2000 samples produced a well-generalized
+#     model with no MIA signal — yeom_acc ~0.52 across all configs).
+#   - DP_EPSILON=0.1 means scale b = sensitivity/epsilon = 10.0, which is
+#     large relative to typical ReLU-embedding magnitudes (~1-5); enough to
+#     actually perturb predictions rather than be absorbed by head retraining.
+EPOCHS = 30
 SEED = 42
-DP_EPSILON = 1.0
+DP_EPSILON = 0.1
 DP_SENSITIVITY = 1.0
 BIE_TILE_SIZE = 10
 BIE_KEY_SEED = 7

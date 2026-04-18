@@ -209,13 +209,17 @@ def test_shadow_splits_are_deterministic_with_fixed_seed() -> None:
 def test_shadow_oversize_raises_value_error() -> None:
     y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
     splits = split_pool_indices(y, seed=_SPLIT_SEED)
+    shadow_pool_size = len(splits.shadow_pool)
+    # Pick sizes whose sum deliberately exceeds the shadow pool so the
+    # constructor must raise. Using (pool, pool) guarantees overflow
+    # regardless of how SHADOW_POOL_SIZE is retuned in data.py.
     with pytest.raises(ValueError):
         build_shadow_splits(
             shadow_indices=splits.shadow_pool,
             y=y,
             n_shadows=_N_SHADOWS_FOR_TEST,
-            train_size=2000,
-            holdout_size=2000,
+            train_size=shadow_pool_size,
+            holdout_size=shadow_pool_size,
             seed=_SPLIT_SEED,
         )
 
