@@ -98,10 +98,16 @@ class RunConfig:
     tag: str
 
     @property
+    def _hash_tile_size(self) -> int:
+        """Feed 0 when BIE is off (matches spec §5 convention)."""
+        return self.bie_tile_size if self.bie_enabled else 0
+
+    @property
     def victim_encoder_hash(self) -> str:
         return encoder_hash(
             bie_on=self.bie_enabled,
             bie_key_seed=self.bie_key_seed,
+            bie_tile_size=self._hash_tile_size,
             training_seed=self.seed,
             epochs=self.epochs,
         )
@@ -110,6 +116,7 @@ class RunConfig:
         return encoder_hash(
             bie_on=self.bie_enabled,
             bie_key_seed=self.bie_key_seed,
+            bie_tile_size=self._hash_tile_size,
             training_seed=self.seed + SHADOW_TRAINING_SEED_OFFSET + shadow_idx,
             epochs=self.epochs,
         )

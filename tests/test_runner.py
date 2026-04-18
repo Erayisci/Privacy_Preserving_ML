@@ -92,6 +92,20 @@ def test_epochs_changes_encoder_hash() -> None:
     assert a.victim_encoder_hash != b.victim_encoder_hash
 
 
+def test_bie_tile_size_changes_hash_when_bie_enabled() -> None:
+    a = _make_config(bie_enabled=True, bie_tile_size=10)
+    b = _make_config(bie_enabled=True, bie_tile_size=15)
+    assert a.victim_encoder_hash != b.victim_encoder_hash
+
+
+def test_bie_tile_size_is_irrelevant_when_bie_disabled() -> None:
+    # When BIE is off, tile_size must not affect the cache key; otherwise
+    # every baseline would re-train per tile_size CLI default change.
+    a = _make_config(bie_enabled=False, bie_tile_size=10)
+    b = _make_config(bie_enabled=False, bie_tile_size=15)
+    assert a.victim_encoder_hash == b.victim_encoder_hash
+
+
 # --- CLI parsing ---
 
 
@@ -188,6 +202,9 @@ def test_load_ppt_class_or_stub_returns_real_class_when_present() -> None:
 
 
 def test_construct_ppts_assigns_layers_correctly() -> None:
+    # All three teammate modules (dp, bie, smpc) now ship real classes;
+    # the stub-fallback warning is separately exercised by
+    # test_load_ppt_class_or_stub_returns_stub_on_missing_module.
     from argparse import Namespace
 
     ns = Namespace(
@@ -200,8 +217,7 @@ def test_construct_ppts_assigns_layers_correctly() -> None:
         smpc_shares=2,
         seed=42,
     )
-    with pytest.warns(UserWarning):
-        image_ppts, embedding_ppts = _construct_ppts(ns)
+    image_ppts, embedding_ppts = _construct_ppts(ns)
     assert len(image_ppts) == 1
     assert len(embedding_ppts) == 2
     assert all(p.layer == "image" for p in image_ppts)
