@@ -8,4 +8,4 @@ regenerated on the next run.
 Kept in its own tiny module (no TensorFlow import) so that cache.py
 and other lightweight code can consume it without pulling TF in.
 """
-SCHEMA_VERSION: int = 2
+SCHEMA_VERSION: int = 3

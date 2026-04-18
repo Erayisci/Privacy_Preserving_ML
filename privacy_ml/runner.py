@@ -48,6 +48,7 @@ from .data import (
     ShadowSplit,
     SplitIndices,
     build_shadow_splits,
+    load_kaggle_origins,
     load_kaggle_pool,
     split_pool_indices,
 )
@@ -499,7 +500,8 @@ def run_single_config(
 ) -> RunResult:
     """Execute one pipeline configuration end-to-end. Returns a RunResult."""
     X, y = load_kaggle_pool(config.data_dir, DEFAULT_IMG_SIZE)
-    splits = split_pool_indices(y, seed=config.seed)
+    subdirs = load_kaggle_origins(config.data_dir)
+    splits = split_pool_indices(y, subdirs, seed=config.seed)
 
     victim_paths = cache_paths(config.cache_dir, config.victim_encoder_hash)
     victim_meta = {
