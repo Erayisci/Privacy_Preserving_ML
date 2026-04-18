@@ -17,7 +17,7 @@ Deliver two things:
 
 2. **Literature-review subsection on Jarin & Eshete 2021 ("PRICURE")** — ~300–400 words, inserted into `conference_101719.tex` after the existing Literature Review opener, formatted in the repo's IEEEtran numeric-citation style.
 
-**Non-goals**: reconstruction attack (another teammate's task); DP/BIE/SMPC implementations (teammates'); ImageNet pretraining or architecture search.
+**Non-goals**: DP/BIE/SMPC implementations (teammates'); ImageNet pretraining or architecture search. *(Reconstruction attack was originally İlmay's separate notebook; as of commit `80edf8c` it is integrated into `privacy_ml.attacks.reconstruction` so the runner produces unified MIA + reconstruction metrics across all 8 configurations.)*
 
 ## §2 — Architecture (SSOT: presentation slide 3)
 
@@ -186,7 +186,7 @@ results/cache/
 
 **Expected speedup**: a DP ε sweep of 6 values reuses the same encoder and embeddings; only the head retraining (~seconds) and MIA (~seconds) runs per sweep point. First run per encoder config takes the full training time; subsequent runs take seconds.
 
-## §6 — MIA attacks
+## §6 — Attacks
 
 ### Yeom et al. (2018) — loss threshold
 
@@ -202,6 +202,36 @@ Zero extra training required; implementable in <100 lines.
 4. Apply the attack classifier to the victim's confidence vectors on the 2000-query eval set. Report attack accuracy and AUC.
 
 Shadow encoders inherit the same architecture as the victim and share the caching layer.
+
+### Reconstruction attack (İlmay Taş; integrated into the runner)
+
+Attacker threat model (slide 22): holds a leaked 128-d embedding from the
+cloud and attempts to recover the original chest X-ray. Implemented via
+a decoder that maps 128-d vectors back to (150, 150, 1) grayscale images.
+
+Pipeline per config:
+  1. Train a decoder on (E_members_priv, X_members_original) pairs — the
+     attacker's auxiliary data.
+  2. Apply the decoder to the victim's privatized nonmember embeddings
+     (E_nonmem_priv).
+  3. Compare reconstructions to the corresponding ORIGINAL nonmember
+     images and compute MSE, PSNR, SSIM.
+
+Decoder architecture (ported from `reconstruction_attack.ipynb` cell 9 —
+İlmay's design):
+
+    Dense(7*7*128, relu) -> Reshape(7,7,128)
+    -> 4x Conv2DTranspose (stride 2): 7 -> 14 -> 28 -> 56 -> 112
+    -> Resize(150, 150)
+    -> Conv2D(1, 3x3, sigmoid)
+
+Trained 20 epochs with MSE loss, Adam optimizer, batch size 32 — see
+`privacy_ml.attacks.reconstruction.DECODER_EPOCHS` (reduced from İlmay's 50
+to fit the 8-config matrix budget). LPIPS and FID are out of scope for the
+module; İlmay's notebook still covers those for deeper post-hoc analysis.
+
+Reference: spec §8 privacy targets (slide 29): higher MSE, lower PSNR,
+lower SSIM = stronger defense.
 
 ## §7 — CLI
 
@@ -255,6 +285,7 @@ Per invocation, emit this JSON schema to `results/runs.jsonl`:
     "yeom":   {"attack_accuracy": 0.57, "attack_auc": 0.59},
     "shokri": {"attack_accuracy": 0.54, "attack_auc": 0.56}
   },
+  "reconstruction": {"mse": 0.021, "psnr": 16.8, "ssim": 0.61},
   "efficiency": {
     "train_latency_seconds": 185.4,
     "inference_latency_ms_per_query": 1.2,
@@ -266,7 +297,10 @@ Per invocation, emit this JSON schema to `results/runs.jsonl`:
 ```
 
 - **Utility targets** (slide 28): accuracy drop < 5%; F1 ≥ baseline − 0.05; ECE tracked for overconfidence under noise.
-- **Privacy targets** (slide 29): attack accuracy → 50% (random guessing = perfect defense); AUC → 0.5.
+- **Privacy targets** (slide 29):
+  - *MIA*: attack accuracy → 50% (random guessing = perfect defense); AUC → 0.5.
+  - *Reconstruction*: high MSE, low PSNR (dB), low SSIM → stronger defense
+    against pixel-level recovery.
 - **Efficiency** (slide 30): latency, memory, bandwidth; no hard targets, reported as-is.
 
 ## §9 — Testing
