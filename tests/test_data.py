@@ -14,6 +14,8 @@ import numpy as np
 import pytest
 
 from privacy_ml.data import (
+    EXPECTED_KAGGLE_TEST_SIZE,
+    EXPECTED_KAGGLE_TRAIN_SIZE,
     EXPECTED_TOTAL,
     KAGGLE_CLASS_DIRS,
     KAGGLE_SUBDIRS,
@@ -24,6 +26,7 @@ from privacy_ml.data import (
     VICTIM_NONMEMBERS_SIZE,
     build_shadow_splits,
     class_balance,
+    load_kaggle_origins,
     resolve_kaggle_base,
     split_pool_indices,
 )
@@ -51,41 +54,87 @@ def _synthetic_labels(total: int, pneumonia_fraction: float, seed: int) -> np.nd
     return labels
 
 
-def test_split_sizes_match_spec() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+def _synthetic_native_pool(
+    n_train: int, n_test: int, pneumonia_fraction: float, seed: int
+):
+    """Build (y, subdirs) for a fake Kaggle-native layout."""
+    rng = np.random.default_rng(seed)
+
+    def _stratified_labels(n: int) -> np.ndarray:
+        n_pneu = int(round(n * pneumonia_fraction))
+        labs = np.concatenate(
+            [
+                np.full(n_pneu, PNEUMONIA_LABEL, dtype=np.int64),
+                np.full(n - n_pneu, NORMAL_LABEL, dtype=np.int64),
+            ]
+        )
+        rng.shuffle(labs)
+        return labs
+
+    y_train = _stratified_labels(n_train)
+    y_test = _stratified_labels(n_test)
+    y = np.concatenate([y_train, y_test])
+    subdirs = np.concatenate(
+        [
+            np.full(n_train, "train", dtype="<U5"),
+            np.full(n_test, "test", dtype="<U5"),
+        ]
+    )
+    return y, subdirs
+
+
+def test_native_split_sizes_match_spec() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     assert len(splits.victim_members) == VICTIM_MEMBERS_SIZE
     assert len(splits.victim_nonmembers) == VICTIM_NONMEMBERS_SIZE
     assert len(splits.shadow_pool) == SHADOW_POOL_SIZE
 
 
-def test_splits_are_pairwise_disjoint() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
-    victim_members = set(splits.victim_members.tolist())
-    victim_nonmembers = set(splits.victim_nonmembers.tolist())
-    shadow_pool = set(splits.shadow_pool.tolist())
-    assert victim_members.isdisjoint(victim_nonmembers)
-    assert victim_members.isdisjoint(shadow_pool)
-    assert victim_nonmembers.isdisjoint(shadow_pool)
-
-
-def test_splits_cover_exactly_expected_total() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
-    combined = np.concatenate(
-        [splits.victim_members, splits.victim_nonmembers, splits.shadow_pool]
+def test_native_splits_are_pairwise_disjoint() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
     )
-    assert len(combined) == EXPECTED_TOTAL
-    assert len(set(combined.tolist())) == EXPECTED_TOTAL
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
+    members = set(splits.victim_members.tolist())
+    nonmembers = set(splits.victim_nonmembers.tolist())
+    shadow = set(splits.shadow_pool.tolist())
+    assert members.isdisjoint(nonmembers)
+    assert members.isdisjoint(shadow)
+    assert nonmembers.isdisjoint(shadow)
 
 
-def test_class_balance_within_tolerance() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+def test_native_victim_members_are_drawn_only_from_train_subdir() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
+    assert np.all(subdirs[splits.victim_members] == "train")
+    assert np.all(subdirs[splits.shadow_pool] == "train")
+    assert np.all(subdirs[splits.victim_nonmembers] == "test")
+
+
+def test_native_class_balance_within_tolerance() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     for name, indices in (
         ("victim_members", splits.victim_members),
-        ("victim_nonmembers", splits.victim_nonmembers),
         ("shadow_pool", splits.shadow_pool),
     ):
         observed = class_balance(y[indices])
@@ -95,45 +144,62 @@ def test_class_balance_within_tolerance() -> None:
         )
 
 
-def test_deterministic_with_fixed_seed() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    first = split_pool_indices(y, seed=_SPLIT_SEED)
-    second = split_pool_indices(y, seed=_SPLIT_SEED)
-    np.testing.assert_array_equal(first.victim_members, second.victim_members)
-    np.testing.assert_array_equal(
-        first.victim_nonmembers, second.victim_nonmembers
+def test_native_split_deterministic_with_fixed_seed() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
     )
+    first = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
+    second = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
+    np.testing.assert_array_equal(first.victim_members, second.victim_members)
+    np.testing.assert_array_equal(first.victim_nonmembers, second.victim_nonmembers)
     np.testing.assert_array_equal(first.shadow_pool, second.shadow_pool)
 
 
-def test_different_seeds_produce_different_splits() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    a = split_pool_indices(y, seed=_SPLIT_SEED)
-    b = split_pool_indices(y, seed=_SPLIT_SEED + 1)
+def test_native_split_different_seeds_differ() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    a = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
+    b = split_pool_indices(y, subdirs, seed=_SPLIT_SEED + 1)
     assert not np.array_equal(a.victim_members, b.victim_members)
 
 
-def test_insufficient_pool_raises_value_error() -> None:
-    short_pool = _synthetic_labels(
-        EXPECTED_TOTAL - 100, _PNEUMONIA_FRACTION, _POOL_SEED
+def test_native_insufficient_train_pool_raises_value_error() -> None:
+    y, subdirs = _synthetic_native_pool(
+        n_train=VICTIM_MEMBERS_SIZE - 1,  # one short
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
     )
     with pytest.raises(ValueError):
-        split_pool_indices(short_pool, seed=_SPLIT_SEED)
+        split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
 
 
-def test_larger_pool_downsamples_to_exact_target_sizes() -> None:
-    oversized = _synthetic_labels(
-        EXPECTED_TOTAL + 500, _PNEUMONIA_FRACTION, _POOL_SEED
+def test_native_missing_test_subdir_raises_value_error() -> None:
+    y_train = np.full(
+        EXPECTED_KAGGLE_TRAIN_SIZE, PNEUMONIA_LABEL, dtype=np.int64
     )
-    splits = split_pool_indices(oversized, seed=_SPLIT_SEED)
-    assert len(splits.victim_members) == VICTIM_MEMBERS_SIZE
-    assert len(splits.victim_nonmembers) == VICTIM_NONMEMBERS_SIZE
-    assert len(splits.shadow_pool) == SHADOW_POOL_SIZE
+    subdirs = np.full(
+        EXPECTED_KAGGLE_TRAIN_SIZE, "train", dtype="<U5"
+    )
+    with pytest.raises(ValueError):
+        split_pool_indices(y_train, subdirs, seed=_SPLIT_SEED)
 
 
 def test_shadow_splits_produce_correct_count_and_sizes() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     shadow_splits = build_shadow_splits(
         shadow_indices=splits.shadow_pool,
         y=y,
@@ -149,8 +215,13 @@ def test_shadow_splits_produce_correct_count_and_sizes() -> None:
 
 
 def test_shadow_train_and_holdout_disjoint_within_each_shadow() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     shadow_splits = build_shadow_splits(
         shadow_indices=splits.shadow_pool,
         y=y,
@@ -166,8 +237,13 @@ def test_shadow_train_and_holdout_disjoint_within_each_shadow() -> None:
 
 
 def test_shadow_indices_are_subset_of_shadow_pool() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     shadow_pool_set = set(splits.shadow_pool.tolist())
     shadow_splits = build_shadow_splits(
         shadow_indices=splits.shadow_pool,
@@ -183,8 +259,13 @@ def test_shadow_indices_are_subset_of_shadow_pool() -> None:
 
 
 def test_shadow_splits_are_deterministic_with_fixed_seed() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     first = build_shadow_splits(
         splits.shadow_pool,
         y,
@@ -207,8 +288,13 @@ def test_shadow_splits_are_deterministic_with_fixed_seed() -> None:
 
 
 def test_shadow_oversize_raises_value_error() -> None:
-    y = _synthetic_labels(EXPECTED_TOTAL, _PNEUMONIA_FRACTION, _POOL_SEED)
-    splits = split_pool_indices(y, seed=_SPLIT_SEED)
+    y, subdirs = _synthetic_native_pool(
+        n_train=EXPECTED_KAGGLE_TRAIN_SIZE,
+        n_test=EXPECTED_KAGGLE_TEST_SIZE,
+        pneumonia_fraction=_PNEUMONIA_FRACTION,
+        seed=_POOL_SEED,
+    )
+    splits = split_pool_indices(y, subdirs, seed=_SPLIT_SEED)
     shadow_pool_size = len(splits.shadow_pool)
     # Pick sizes whose sum deliberately exceeds the shadow pool so the
     # constructor must raise. Using (pool, pool) guarantees overflow

@@ -1,11 +1,17 @@
-"""Dataset loading and stratified splitting.
+"""Dataset loading and Kaggle-native stratified splitting.
 
-The Kaggle chest-xray-pneumonia pool (~5856 images) is loaded, then
-reshuffled and split into canonical subsets with fixed seed=42:
+The Kaggle chest-xray-pneumonia dataset is loaded into a flat (X, y)
+pool along with an origin annotation (load_kaggle_origins) that says
+whether each image came from train/, val/, or test/. The split function
+then uses those origins to carve out three subsets:
 
-  victim_members:    2000 images (in the victim's training set)
-  victim_nonmembers: 1000 images (held out; "not in training" for MIA)
-  shadow_pool:       2856 images (used to train Shokri shadow models)
+  victim_members:    2000 stratified subsample of Kaggle train/
+  victim_nonmembers: all 624 of Kaggle test/
+  shadow_pool:       remaining ~3216 of Kaggle train/
+
+Kaggle val/ (only 16 images) is dropped. The train/test distribution
+shift built into Kaggle's native split is what gives MIA a signal to
+exploit — see spec §4 revision history.
 
 Shadow models bootstrap-sample (train, holdout) pairs from shadow_pool;
 train and holdout are disjoint within a shadow but may overlap across
@@ -21,15 +27,18 @@ from typing import List, NamedTuple, Tuple
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-# Shrunk from 2000/1000/2856 to amplify the train-test generalization gap
-# that MIA exploits. In the first v1 run, baseline yeom_acc was 0.52 (near
-# random) because the IID pooled split produced a well-generalized model.
-# Reducing victim_members forces overfitting; keeping balanced members /
-# nonmembers for MIA eval; remaining ~4856 go to the shadow pool (more
-# independent shadow draws for Shokri).
-VICTIM_MEMBERS_SIZE: int = 500
-VICTIM_NONMEMBERS_SIZE: int = 500
-SHADOW_POOL_SIZE: int = 4856
+# --- Canonical split sizes for the Kaggle-native partitioning ---
+# Kaggle's chest-xray-pneumonia ships with train/val/test subdirs; we use
+# train/ as the victim+shadow pool and test/ as victim_nonmembers so the
+# natural distribution shift between train/ and test/ creates the train-test
+# generalization gap that MIA exploits. val/ is only 16 images and is
+# dropped. See spec §4 revision history for the retune rationale.
+EXPECTED_KAGGLE_TRAIN_SIZE: int = 5216
+EXPECTED_KAGGLE_TEST_SIZE: int = 624
+
+VICTIM_MEMBERS_SIZE: int = 2000                         # subsample of Kaggle train/
+VICTIM_NONMEMBERS_SIZE: int = EXPECTED_KAGGLE_TEST_SIZE # all of Kaggle test/
+SHADOW_POOL_SIZE: int = EXPECTED_KAGGLE_TRAIN_SIZE - VICTIM_MEMBERS_SIZE
 EXPECTED_TOTAL: int = (
     VICTIM_MEMBERS_SIZE + VICTIM_NONMEMBERS_SIZE + SHADOW_POOL_SIZE
 )
@@ -65,54 +74,65 @@ def class_balance(labels: np.ndarray) -> float:
     return float(np.mean(labels == PNEUMONIA_LABEL))
 
 
-def split_pool_indices(y: np.ndarray, seed: int) -> SplitIndices:
-    """Stratified 3-way split of the pool into the canonical subsets.
+def split_pool_indices(
+    y: np.ndarray,
+    subdirs: np.ndarray,
+    seed: int,
+) -> SplitIndices:
+    """Partition the pool using Kaggle's native train/test structure.
 
-    Splits preserve class balance within each subset and are deterministic
-    for a fixed seed. If the pool is larger than EXPECTED_TOTAL, the excess
-    is discarded (stratified downsample); if smaller, a ValueError is
-    raised.
+    Kaggle's test/ is known to have different radiographic characteristics
+    than train/ (the dataset maintainer drew it from a distinct sampling
+    protocol). Using test/ as victim_nonmembers introduces the
+    distribution shift that makes the split-model classifier's
+    generalization gap measurable — which in turn gives MIA a signal to
+    exploit. val/ (only 16 images) is dropped.
+
+    Parameters
+    ----------
+    y : np.ndarray of shape (N,), int labels {0, 1}
+    subdirs : np.ndarray of shape (N,), dtype '<U5', values in
+        {'train', 'val', 'test'} — the Kaggle subdir each sample was
+        loaded from (see load_kaggle_origins).
+    seed : int, for reproducible stratified subsampling.
+
+    Returns
+    -------
+    SplitIndices with:
+        victim_members: stratified VICTIM_MEMBERS_SIZE subsample of train/
+        shadow_pool:    remaining train/ indices (used by Shokri shadows)
+        victim_nonmembers: all test/ indices
     """
-    total = len(y)
-    if total < EXPECTED_TOTAL:
+    if len(y) != len(subdirs):
         raise ValueError(
-            f"Pool has {total} samples; need at least {EXPECTED_TOTAL}"
+            f"y and subdirs must have matching length; "
+            f"got {len(y)} and {len(subdirs)}"
         )
 
-    all_indices = np.arange(total)
+    train_indices = np.where(subdirs == "train")[0]
+    test_indices = np.where(subdirs == "test")[0]
 
-    shadow_indices, victim_indices = train_test_split(
-        all_indices,
-        train_size=SHADOW_POOL_SIZE,
-        stratify=y[all_indices],
-        random_state=seed,
-    )
-
-    victim_total = VICTIM_MEMBERS_SIZE + VICTIM_NONMEMBERS_SIZE
-    if len(victim_indices) > victim_total:
-        victim_indices, _ = train_test_split(
-            victim_indices,
-            train_size=victim_total,
-            stratify=y[victim_indices],
-            random_state=seed,
-        )
-    elif len(victim_indices) < victim_total:
+    if len(train_indices) < VICTIM_MEMBERS_SIZE:
         raise ValueError(
-            f"After shadow_pool allocation, only {len(victim_indices)} "
-            f"remain for victim splits; need {victim_total}"
+            f"Kaggle train/ has {len(train_indices)} images; need at least "
+            f"{VICTIM_MEMBERS_SIZE} for victim_members"
+        )
+    if len(test_indices) == 0:
+        raise ValueError(
+            "Kaggle test/ is empty; cannot form victim_nonmembers"
         )
 
-    member_indices, nonmember_indices = train_test_split(
-        victim_indices,
+    member_indices, remaining_train = train_test_split(
+        train_indices,
         train_size=VICTIM_MEMBERS_SIZE,
-        stratify=y[victim_indices],
+        stratify=y[train_indices],
         random_state=seed,
     )
 
     return SplitIndices(
         victim_members=member_indices,
-        victim_nonmembers=nonmember_indices,
-        shadow_pool=shadow_indices,
+        victim_nonmembers=test_indices,
+        shadow_pool=remaining_train,
     )
 
 
