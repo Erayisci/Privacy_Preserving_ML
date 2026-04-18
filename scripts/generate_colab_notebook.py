@@ -58,8 +58,8 @@ MIA evaluation matrix from `privacy_ml` package on Colab T4 GPU.
 4. Run the test suite (expect all green)
 5. Download the `chest-xray-pneumonia` Kaggle dataset
 6. Verify dataset structure
-7. Run **8 canonical PPT configurations** (baseline, 3 singles, 3 pairs, all-three)
-8. Display results as a pandas DataFrame
+7. Run **8 canonical PPT configurations** × **2 attacks** (MIA: Yeom + Shokri; Reconstruction decoder)
+8. Display utility + privacy metrics (MIA accuracy + reconstruction MSE/PSNR/SSIM) as a pandas DataFrame
 9. Download `runs.jsonl` to commit to the repo
 
 ## Authoritative references
@@ -460,6 +460,7 @@ def build_config(tag: str, flags: dict) -> RunConfig:
         smpc_shares=SMPC_SHARES,
         run_yeom=True,
         run_shokri=True,
+        run_reconstruction=True,
         epochs=EPOCHS,
         seed=SEED,
         data_dir=base,
@@ -519,11 +520,16 @@ for idx, (tag, flags) in enumerate(configs_to_run, start=1):
             f"{result.privacy.shokri.attack_accuracy:.3f}"
             if result.privacy.shokri else "—"
         )
+        recon_psnr = (
+            f"{result.reconstruction.psnr:.1f}dB"
+            if result.reconstruction else "—"
+        )
         print(
             f"   OK test_acc={result.utility.test_accuracy:.3f}  "
             f"f1={result.utility.f1:.3f}  "
             f"yeom={yeom_acc}  "
             f"shokri={shokri_acc}  "
+            f"recon_psnr={recon_psnr}  "
             f"({_fmt_duration(elapsed)})\\n"
         )
     except Exception as e:
@@ -572,6 +578,7 @@ def flatten(rec: dict) -> dict:
     eff = rec["efficiency"]
     yeom = rec["privacy"].get("yeom")
     shokri = rec["privacy"].get("shokri")
+    recon = rec.get("reconstruction")
     return {
         "tag": rec["tag"],
         "dp": config["dp_enabled"],
@@ -585,6 +592,9 @@ def flatten(rec: dict) -> dict:
         "yeom_auc": yeom["attack_auc"] if yeom else None,
         "shokri_acc": shokri["attack_accuracy"] if shokri else None,
         "shokri_auc": shokri["attack_auc"] if shokri else None,
+        "recon_mse": recon["mse"] if recon else None,
+        "recon_psnr": recon["psnr"] if recon else None,
+        "recon_ssim": recon["ssim"] if recon else None,
         "train_s": eff["train_latency_seconds"],
         "inf_ms": eff["inference_latency_ms_per_query"],
         "mem_mb": eff["memory_peak_mb"],
@@ -649,9 +659,10 @@ CELL_12_NEXT_STEPS = """\
    ```
 
 2. **Interpret the numbers**:
-   - *Privacy*: how close is `yeom_acc` / `shokri_acc` to 0.50? Closer = stronger defense.
+   - *MIA privacy*: how close is `yeom_acc` / `shokri_acc` to 0.50? Closer = stronger defense.
+   - *Reconstruction privacy*: higher `recon_mse`, lower `recon_psnr`, lower `recon_ssim` = stronger defense against pixel-level recovery.
    - *Utility*: how much does `test_acc` drop from baseline? Target per spec §8: <5%.
-   - *Trade-off*: plot privacy vs utility per config.
+   - *Trade-off*: plot privacy (both axes) vs utility per config.
 
 3. **Per-paper lit-review paragraphs** in `conference_101719.tex`:
    - Eray — Paper 1 (Kiya et al. 2023, Block-wise ViT)
