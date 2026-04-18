@@ -11,7 +11,20 @@ from __future__ import annotations
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
-SCHEMA_VERSION: int = 1
+from .schema import SCHEMA_VERSION
+
+__all__ = [
+    "SCHEMA_VERSION",
+    "DEFAULT_IMG_SIZE",
+    "DEFAULT_CHANNELS",
+    "EMBEDDING_DIM",
+    "DEFAULT_DROPOUT_RATE",
+    "DEFAULT_LEARNING_RATE",
+    "build_encoder",
+    "build_head",
+    "build_end_to_end",
+    "compile_for_binary_classification",
+]
 
 DEFAULT_IMG_SIZE: int = 150
 DEFAULT_CHANNELS: int = 1
