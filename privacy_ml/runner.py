@@ -29,6 +29,12 @@ from typing import Callable, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 
+from .attacks.reconstruction import (
+    ReconstructionResult,
+    build_decoder,
+    compute_reconstruction_metrics,
+    train_decoder,
+)
 from .attacks.shokri import (
     ShokriAttackResult,
     assemble_attack_training_data,
@@ -71,6 +77,8 @@ MIA_EVAL_PER_HALF: int = 500
 ATTACK_CLASSIFIER_EPOCHS: int = 20
 SHADOW_TRAINING_SEED_OFFSET: int = 100
 EMBEDDING_BYTES_PER_QUERY: int = EMBEDDING_DIM * 4  # 128 * 4 bytes
+DECODER_EPOCHS: int = 20
+DECODER_BATCH_SIZE: int = 32
 
 
 @dataclass(frozen=True)
@@ -88,6 +96,7 @@ class RunConfig:
     # MIA variants
     run_yeom: bool
     run_shokri: bool
+    run_reconstruction: bool
     # Training
     epochs: int
     seed: int
@@ -146,6 +155,7 @@ class RunResult:
     config: RunConfig
     utility: UtilityResult
     privacy: PrivacyResult
+    reconstruction: Optional[ReconstructionResult]
     efficiency: EfficiencyResult
     encoder_hash_id: str
     timestamp: str
@@ -468,6 +478,47 @@ def _run_shokri_attack(
     )
 
 
+# --- Reconstruction attack ---
+
+
+def _run_reconstruction_attack(
+    X_members: np.ndarray,
+    X_nonmembers: np.ndarray,
+    E_members_priv: np.ndarray,
+    E_nonmem_priv: np.ndarray,
+    epochs: int,
+    seed: int,
+) -> ReconstructionResult:
+    """Train a decoder on (member embeddings, member images); evaluate on nonmembers.
+
+    The attacker has access to (embedding, image) pairs from their own queries
+    — we simulate this by using victim_members as the decoder's training data
+    and measuring reconstruction quality on victim_nonmembers (unseen).
+
+    The returned metrics are averaged across victim_nonmembers. Ground truth
+    is the ORIGINAL (un-privatized) image so that high MSE / low PSNR / low
+    SSIM indicate successful defense.
+    """
+    decoder = build_decoder(
+        embedding_dim=E_members_priv.shape[-1],
+        img_size=X_members.shape[1],
+        channels=X_members.shape[-1],
+        name="recon_decoder",
+    )
+    train_decoder(
+        decoder=decoder,
+        embeddings=E_members_priv,
+        images=X_members,
+        epochs=epochs,
+        batch_size=DECODER_BATCH_SIZE,
+        seed=seed,
+    )
+    reconstructed = np.asarray(
+        decoder.predict(E_nonmem_priv, verbose=0), dtype=np.float32
+    )
+    return compute_reconstruction_metrics(X_nonmembers, reconstructed)
+
+
 # --- Main orchestrator ---
 
 
@@ -610,10 +661,22 @@ def run_single_config(
             config=config,
         )
 
+    reconstruction_result = None
+    if config.run_reconstruction:
+        reconstruction_result = _run_reconstruction_attack(
+            X_members=X[splits.victim_members],
+            X_nonmembers=X[splits.victim_nonmembers],
+            E_members_priv=E_members_priv,
+            E_nonmem_priv=E_nonmem_priv,
+            epochs=DECODER_EPOCHS,
+            seed=config.seed + 2000,
+        )
+
     return RunResult(
         config=config,
         utility=utility,
         privacy=PrivacyResult(yeom=yeom_result, shokri=shokri_result),
+        reconstruction=reconstruction_result,
         efficiency=EfficiencyResult(
             train_latency_seconds=float(train_latency),
             inference_latency_ms_per_query=float(inference_latency_ms),
@@ -660,12 +723,22 @@ def _run_result_to_jsonable(result: RunResult) -> dict:
             }
         ),
     }
+    reconstruction_dict = (
+        None
+        if result.reconstruction is None
+        else {
+            "mse": result.reconstruction.mse,
+            "psnr": result.reconstruction.psnr,
+            "ssim": result.reconstruction.ssim,
+        }
+    )
     return {
         "tag": result.config.tag,
         "config": config_dict,
         "encoder_hash": result.encoder_hash_id,
         "utility": result.utility._asdict(),
         "privacy": privacy_dict,
+        "reconstruction": reconstruction_dict,
         "efficiency": result.efficiency._asdict(),
         "timestamp": result.timestamp,
     }

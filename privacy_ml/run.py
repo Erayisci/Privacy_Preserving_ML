@@ -31,6 +31,7 @@ _DEFAULT_SMPC_SHARES: int = 2
 _DEFAULT_EPOCHS: int = 10
 _DEFAULT_SEED: int = 42
 _DEFAULT_MIA: str = "yeom,shokri"
+_DEFAULT_RECONSTRUCTION: bool = False
 _DEFAULT_TAG: str = "run"
 
 
@@ -50,6 +51,11 @@ def _build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--smpc", action="store_true", help="Enable SMPC additive secret sharing on embeddings.")
     parser.add_argument("--smpc-shares", type=int, default=_DEFAULT_SMPC_SHARES)
     parser.add_argument("--mia", type=str, default=_DEFAULT_MIA, help="Comma-separated MIA variants (yeom,shokri).")
+    parser.add_argument(
+        "--reconstruction",
+        action="store_true",
+        help="Also run the reconstruction attack (decoder trained per config).",
+    )
     parser.add_argument("--epochs", type=int, default=_DEFAULT_EPOCHS)
     parser.add_argument("--seed", type=int, default=_DEFAULT_SEED)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
@@ -163,6 +169,7 @@ def build_run_config(args: argparse.Namespace) -> RunConfig:
         smpc_shares=int(args.smpc_shares),
         run_yeom=run_yeom,
         run_shokri=run_shokri,
+        run_reconstruction=bool(args.reconstruction),
         epochs=int(args.epochs),
         seed=int(args.seed),
         data_dir=Path(args.data_dir),

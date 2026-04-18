@@ -51,6 +51,7 @@ def _make_config(**overrides) -> RunConfig:
         smpc_shares=2,
         run_yeom=True,
         run_shokri=False,
+        run_reconstruction=False,
         epochs=10,
         seed=42,
         data_dir=Path("/tmp/data"),
@@ -143,6 +144,7 @@ def test_build_run_config_maps_all_flags() -> None:
         smpc=True,
         smpc_shares=3,
         mia="yeom,shokri",
+        reconstruction=True,
         epochs=5,
         seed=99,
         data_dir=Path("/a"),
@@ -160,6 +162,7 @@ def test_build_run_config_maps_all_flags() -> None:
     assert config.smpc_shares == 3
     assert config.run_yeom is True
     assert config.run_shokri is True
+    assert config.run_reconstruction is True
     assert config.epochs == 5
     assert config.seed == 99
     assert config.tag == "weird-tag"
@@ -274,6 +277,7 @@ def test_fit_embedding_ppts_rejects_image_layer_ppt() -> None:
 
 
 def _make_run_result_fixture() -> RunResult:
+    from privacy_ml.attacks.reconstruction import ReconstructionResult
     from privacy_ml.attacks.shokri import ShokriAttackResult
     from privacy_ml.attacks.yeom import YeomAttackResult
 
@@ -288,6 +292,7 @@ def _make_run_result_fixture() -> RunResult:
             ),
             shokri=ShokriAttackResult(attack_accuracy=0.55, attack_auc=0.59),
         ),
+        reconstruction=ReconstructionResult(mse=0.05, psnr=13.01, ssim=0.42),
         efficiency=EfficiencyResult(
             train_latency_seconds=12.3,
             inference_latency_ms_per_query=0.9,
@@ -308,6 +313,7 @@ def test_run_result_to_jsonable_contains_all_top_level_keys() -> None:
         "encoder_hash",
         "utility",
         "privacy",
+        "reconstruction",
         "efficiency",
         "timestamp",
     }
@@ -317,11 +323,26 @@ def test_run_result_to_jsonable_contains_all_top_level_keys() -> None:
 def test_run_result_to_jsonable_reports_none_for_absent_attacks() -> None:
     result = _make_run_result_fixture()
     result = RunResult(
-        **{**result.__dict__, "privacy": PrivacyResult(yeom=None, shokri=None)}
+        **{
+            **result.__dict__,
+            "privacy": PrivacyResult(yeom=None, shokri=None),
+            "reconstruction": None,
+        }
     )
     payload = _run_result_to_jsonable(result)
     assert payload["privacy"]["yeom"] is None
     assert payload["privacy"]["shokri"] is None
+    assert payload["reconstruction"] is None
+
+
+def test_run_result_to_jsonable_reconstruction_fields() -> None:
+    result = _make_run_result_fixture()
+    payload = _run_result_to_jsonable(result)
+    recon = payload["reconstruction"]
+    assert recon is not None
+    assert recon["mse"] == pytest.approx(0.05)
+    assert recon["psnr"] == pytest.approx(13.01)
+    assert recon["ssim"] == pytest.approx(0.42)
 
 
 def test_run_result_to_jsonable_is_json_encodable() -> None:
