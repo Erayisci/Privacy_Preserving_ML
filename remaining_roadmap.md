@@ -38,9 +38,9 @@ Phase A: Contract setup  ← DONE (Egehan, commits b6001c1..58f13f7)
 
 Phase B: Parallel implementation  ← WE ARE HERE
   3. [Egehan]      Step 3–5: attacks, metrics, runner, CLI
-  4. [Onur]        DP module         → privacy_ml/ppt/dp.py
-  5. [Eray]        SMPC module       → privacy_ml/ppt/smpc.py
-  6. [İrem Damla]  BIE module        → privacy_ml/ppt/bie.py
+  4. [Onur]        DP module        → privacy_ml/ppt/dp.py
+  5. [İrem Damla]  BIE module       → privacy_ml/ppt/bie.py
+  6. [Eray]        SMPC module      → privacy_ml/ppt/smpc.py
   7. [İlmay]       Reconstruction attack → reconstruction_attack.ipynb (already scaffolded, using privacy_ml)
   8. [All]         Lit-review paragraphs in conference_101719.tex
 

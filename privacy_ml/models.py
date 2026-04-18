@@ -8,10 +8,12 @@ See docs/superpowers/specs/2026-04-18-mia-design.md §2.
 """
 from __future__ import annotations
 
-import tensorflow as tf
-from tensorflow.keras import layers, models
+from typing import TYPE_CHECKING
 
 from .schema import SCHEMA_VERSION
+
+if TYPE_CHECKING:
+    import tensorflow as tf
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -38,12 +40,14 @@ def build_encoder(
     channels: int,
     embedding_dim: int,
     name: str,
-) -> tf.keras.Model:
+) -> "tf.keras.Model":
     """Image-to-embedding encoder.
 
     Input shape: (img_size, img_size, channels) grayscale image.
     Output shape: (embedding_dim,) ReLU-activated embedding.
     """
+    from tensorflow.keras import layers, models
+
     inputs = layers.Input(
         shape=(img_size, img_size, channels),
         name=f"{name}_input",
@@ -67,12 +71,14 @@ def build_head(
     embedding_dim: int,
     dropout_rate: float,
     name: str,
-) -> tf.keras.Model:
+) -> "tf.keras.Model":
     """Classifier head on top of an embedding.
 
     Input shape: (embedding_dim,).
     Output shape: (1,) sigmoid probability of PNEUMONIA.
     """
+    from tensorflow.keras import layers, models
+
     inputs = layers.Input(shape=(embedding_dim,), name=f"{name}_input")
     x = layers.Dropout(dropout_rate)(inputs)
     outputs = layers.Dense(1, activation="sigmoid", name=f"{name}_output")(x)
@@ -80,15 +86,17 @@ def build_head(
 
 
 def build_end_to_end(
-    encoder: tf.keras.Model,
-    head: tf.keras.Model,
+    encoder: "tf.keras.Model",
+    head: "tf.keras.Model",
     name: str,
-) -> tf.keras.Model:
+) -> "tf.keras.Model":
     """Chain an encoder and head into a single image-to-prediction model.
 
     Weights are shared with the constituent models, so training this
     model trains both encoder and head in lockstep.
     """
+    from tensorflow.keras import layers, models
+
     inputs = layers.Input(shape=encoder.input_shape[1:], name=f"{name}_input")
     embedding = encoder(inputs)
     predictions = head(embedding)
@@ -96,10 +104,12 @@ def build_end_to_end(
 
 
 def compile_for_binary_classification(
-    model: tf.keras.Model,
+    model: "tf.keras.Model",
     learning_rate: float,
-) -> tf.keras.Model:
+) -> "tf.keras.Model":
     """Compile with Adam + binary crossentropy (matches notebook cell 4)."""
+    import tensorflow as tf
+
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
         loss="binary_crossentropy",
