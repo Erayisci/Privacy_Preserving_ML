@@ -411,16 +411,14 @@ RUNS_JSONL = OUTPUT_DIR / "runs.jsonl"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Experiment hyperparameters ---
-# Tuned for meaningful privacy/utility trade-offs:
-#   - EPOCHS=30 forces overfitting on the new 500-sample victim set
-#     (previously 10 epochs on 2000 samples produced a well-generalized
-#     model with no MIA signal — yeom_acc ~0.52 across all configs).
-#   - DP_EPSILON=0.1 means scale b = sensitivity/epsilon = 10.0, which is
-#     large relative to typical ReLU-embedding magnitudes (~1-5); enough to
-#     actually perturb predictions rather than be absorbed by head retraining.
-EPOCHS = 30
+# With Kaggle-native non-IID splits (victim_members = 2000 subsample of
+# Kaggle train/; victim_nonmembers = all 624 of Kaggle test/), the dataset
+# itself carries a distribution shift sufficient to produce ~15-20 points
+# of generalization gap. Revert EPOCHS/DP_EPSILON to the notebook's
+# original values — no artificial overfitting pressure needed.
+EPOCHS = 10
 SEED = 42
-DP_EPSILON = 0.1
+DP_EPSILON = 1.0
 DP_SENSITIVITY = 1.0
 BIE_TILE_SIZE = 10
 BIE_KEY_SEED = 7
