@@ -106,26 +106,40 @@ The runner reads `mech.layer` and inserts the module at the correct pipeline pos
 
 **Source**: Kaggle `paultimothymooney/chest-xray-pneumonia` (downloaded via `kagglehub` or `kaggle` CLI). Total pool across `train/`, `val/`, `test/` directories ≈ 5856 grayscale chest X-ray images, binary label NORMAL vs PNEUMONIA. Class imbalance ~3:1 pneumonia:normal (slide 28).
 
-**Canonical splits** (reshuffled from the Kaggle pool with `seed=42`, stratified on class):
+**Canonical splits** (Kaggle-native, non-IID — introduces the distribution shift MIA needs):
 
-| Split | Size | Purpose |
+| Split | Size | Source |
 |---|---|---|
-| `victim_members` | 500 | Train the victim encoder + head; "in-training" set for MIA |
-| `victim_nonmembers` | 500 | Held-out from victim; "not-in-training" set for MIA |
-| `shadow_pool` | 4856 | Used to train Shokri shadow models (§6) |
+| `victim_members` | 2000 | Stratified subsample of Kaggle `train/` (5216 images) |
+| `victim_nonmembers` | 624 | All of Kaggle `test/` |
+| `shadow_pool` | 3216 | Remaining Kaggle `train/` after victim subsample |
 
-**Revision history**: the v1 pilot used 2000 / 1000 / 2856 with `EPOCHS=10`
-and produced a well-generalized baseline (test_acc ≈ 0.95) with no MIA
-signal (yeom_acc ≈ 0.52 across all PPT configurations) because IID pooled
-sampling produces no train-test distribution shift. The split sizes above
-were retuned together with `EPOCHS=30` and `DP_EPSILON=0.1` (Cell 9 of the
-Colab driver notebook) to deliberately induce overfitting — the property
-MIA exploits — so that privacy / utility trade-offs become measurable
-across PPT configurations. SCHEMA_VERSION was bumped to 2 to invalidate
-v1 cached encoders.
+Kaggle `val/` (only 16 images) is dropped. The split function
+`privacy_ml.data.split_pool_indices(y, subdirs, seed)` requires the `subdirs`
+annotation produced by `privacy_ml.data.load_kaggle_origins(base_dir)`.
 
-**MIA evaluation set** = 500 randomly-drawn `victim_members` + 500
-`victim_nonmembers` = 1000 balanced queries per PPT config.
+**Revision history**:
+
+- **v1 pilot** (2000 / 1000 / 2856 IID pooled splits, `EPOCHS=10`,
+  `DP_EPSILON=1.0`): baseline test_acc ≈ 0.95, yeom_acc ≈ 0.52. All eight
+  PPT configurations collapsed to the same numbers — no privacy signal
+  because the IID pool produced no train-test generalization gap.
+- **v2 retune** (500 / 500 / 4856 IID pooled, `EPOCHS=30`, `DP_EPSILON=0.1`):
+  DP utility cost appeared (~10 points) but MIA remained near random
+  (yeom_acc ≈ 0.53). Small-sample + long training was still insufficient
+  because the chest X-ray task is texture-dominated and the IID pool
+  sampled both member and nonmember sets from the same distribution.
+- **v3 (current)** (Kaggle-native non-IID splits, `EPOCHS=10`,
+  `DP_EPSILON=1.0`): the distribution shift between Kaggle `train/` and
+  `test/` is the known driver of the notebook's original ~19-point
+  generalization gap (notebook cell 5 vs cell 6). Restoring this shift
+  restores the conditions under which MIA has a signal to exploit,
+  making the eight-config matrix produce measurable differences.
+  `SCHEMA_VERSION` bumped to 3 to invalidate v1/v2 cached encoders.
+
+**MIA evaluation set**: 500 members (sampled from victim_members) + 500
+nonmembers (sampled from victim_nonmembers) = 1000 balanced queries per
+PPT config.
 
 **Shadow model data (Shokri)**: 5 shadow models, each bootstrap-sampled from `shadow_pool` with 500 "member" + 500 "non-member" images per shadow, no overlap within a shadow but overlap across shadows is allowed. Matches Shokri et al.'s original sampling strategy; with the retuned `shadow_pool=4856`, shadow-over-shadow overlap is no longer forced by pool size but bootstrap sampling is kept for distributional match with the victim.
 
