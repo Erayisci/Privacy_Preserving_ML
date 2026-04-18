@@ -110,13 +110,24 @@ The runner reads `mech.layer` and inserts the module at the correct pipeline pos
 
 | Split | Size | Purpose |
 |---|---|---|
-| `victim_members` | 2000 | Train the victim encoder + head; "in-training" set for MIA |
-| `victim_nonmembers` | 1000 | Held-out from victim; "not-in-training" set for MIA |
-| `shadow_pool` | 2856 | Used to train Shokri shadow models (§6) |
+| `victim_members` | 500 | Train the victim encoder + head; "in-training" set for MIA |
+| `victim_nonmembers` | 500 | Held-out from victim; "not-in-training" set for MIA |
+| `shadow_pool` | 4856 | Used to train Shokri shadow models (§6) |
 
-**MIA evaluation set** = 1000 randomly-drawn `victim_members` + 1000 `victim_nonmembers` = 2000 balanced queries per PPT config.
+**Revision history**: the v1 pilot used 2000 / 1000 / 2856 with `EPOCHS=10`
+and produced a well-generalized baseline (test_acc ≈ 0.95) with no MIA
+signal (yeom_acc ≈ 0.52 across all PPT configurations) because IID pooled
+sampling produces no train-test distribution shift. The split sizes above
+were retuned together with `EPOCHS=30` and `DP_EPSILON=0.1` (Cell 9 of the
+Colab driver notebook) to deliberately induce overfitting — the property
+MIA exploits — so that privacy / utility trade-offs become measurable
+across PPT configurations. SCHEMA_VERSION was bumped to 2 to invalidate
+v1 cached encoders.
 
-**Shadow model data (Shokri)**: 5 shadow models, each bootstrap-sampled from `shadow_pool` with 500 "member" + 500 "non-member" images per shadow, no overlap within a shadow but overlap across shadows is allowed. This matches Shokri et al.'s original sampling strategy and works with the finite pool size (5 × 1000 = 5000 > |shadow_pool|=2856, so disjoint-across-shadows is infeasible).
+**MIA evaluation set** = 500 randomly-drawn `victim_members` + 500
+`victim_nonmembers` = 1000 balanced queries per PPT config.
+
+**Shadow model data (Shokri)**: 5 shadow models, each bootstrap-sampled from `shadow_pool` with 500 "member" + 500 "non-member" images per shadow, no overlap within a shadow but overlap across shadows is allowed. Matches Shokri et al.'s original sampling strategy; with the retuned `shadow_pool=4856`, shadow-over-shadow overlap is no longer forced by pool size but bootstrap sampling is kept for distributional match with the victim.
 
 All splits have a unit test that asserts no leakage between `victim_members` and `victim_nonmembers`, and that class balance within each split is within ±2% of the global 3:1 ratio.
 
