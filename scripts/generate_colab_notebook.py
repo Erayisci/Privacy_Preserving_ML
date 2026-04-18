@@ -149,17 +149,28 @@ stream(["git", "status", "--short", "--branch"])
 
 
 CELL_4_INSTALL = """\
-# Cell 4 — Install privacy_ml package + dev dependencies
+# Cell 4 — Install runtime + test deps and make privacy_ml importable
+#
+# We intentionally avoid `pip install -e .` here — on Colab (Python 3.12)
+# it frequently fails at "Getting requirements to build editable did not
+# run successfully" due to a setuptools/PEP 660 build-isolation quirk.
+# Direct sys.path injection is simpler, reproducible, and skips the dance.
 import subprocess
 import sys
 
-print("Installing privacy_ml package + dev deps...")
-print("(pip pulls sklearn + pytest; TF/numpy are already in Colab.)")
-print("This takes ~30-60 seconds on a fresh runtime.\\n")
-
+print("Installing runtime + test deps...")
+print("(TF, numpy, matplotlib, pandas are already in Colab.)\\n")
 subprocess.check_call([
-    sys.executable, "-m", "pip", "install", "-q", "-e", ".[dev]"
+    sys.executable, "-m", "pip", "install", "-q",
+    "scikit-learn>=1.3",
+    "pytest>=7.0",
 ])
+
+# Put the repo on the import path so `import privacy_ml` works without
+# an editable install.
+REPO_PATH = "/content/Privacy_Preserving_ML"
+if REPO_PATH not in sys.path:
+    sys.path.insert(0, REPO_PATH)
 
 print("\\nInstall complete. Verifying imports...\\n")
 
