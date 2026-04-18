@@ -39,8 +39,8 @@ Phase A: Contract setup  ← DONE (Egehan, commits b6001c1..58f13f7)
 Phase B: Parallel implementation  ← WE ARE HERE
   3. [Egehan]      Step 3–5: attacks, metrics, runner, CLI
   4. [Onur]        DP module        → privacy_ml/ppt/dp.py
-  5. [Eray]        BIE module       → privacy_ml/ppt/bie.py
-  6. [İrem Damla]  SMPC module      → privacy_ml/ppt/smpc.py
+  5. [Eray]        SMPC module       → privacy_ml/ppt/bie.py
+  6. [İrem Damla]  BIE module      → privacy_ml/ppt/smpc.py
   7. [İlmay]       Reconstruction attack → reconstruction_attack.ipynb (already scaffolded, using privacy_ml)
   8. [All]         Lit-review paragraphs in conference_101719.tex
 
@@ -117,7 +117,7 @@ class DifferentialPrivacy:
 
 ---
 
-### Eray — Block-wise Image Encryption (BIE)
+### İrem Damla — Block-wise Image Encryption (BIE)
 
 **Create**: `privacy_ml/ppt/bie.py`
 **Layer**: `"image"` — operates on 150×150×1 images, BEFORE the encoder. Encoder will be retrained on BIE'd images by Egehan's runner (don't worry about that).
@@ -161,7 +161,7 @@ class BlockWiseImageEncryption:
 
 ---
 
-### İrem Damla — Secure Multi-Party Computation (SMPC)
+### Eray İşçi — Secure Multi-Party Computation (SMPC)
 
 **Create**: `privacy_ml/ppt/smpc.py`
 **Layer**: `"embedding"` — operates on 128-d vectors.
