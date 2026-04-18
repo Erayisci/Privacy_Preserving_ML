@@ -1,26 +1,26 @@
-"""Utility, privacy, and efficiency metrics per spec §8.
+"""Utility + shared scoring metrics per spec §8.
 
-Utility:
+Utility metrics:
   - test_accuracy  : fraction correct at threshold 0.5
   - f1             : F1 on PNEUMONIA (positive class)
   - ece            : Expected Calibration Error
 
-Privacy metrics are computed by the attacks themselves (see
-privacy_ml.attacks); this module only provides helpers for packaging
-their outputs into the run-record schema.
+Shared scoring:
+  - auc_score      : ROC-AUC wrapper around sklearn with a safe single-class
+                     fallback; consumed by both MIA attacks (yeom, shokri).
 
-Efficiency:
-  - latency/memory are recorded by the runner, not computed here.
-  - embedding_bytes_per_query is a constant = EMBEDDING_DIM × 4 (float32).
+Efficiency metrics (latency, memory, bandwidth) are recorded by the
+runner, not computed here.
 """
 from __future__ import annotations
 
 from typing import NamedTuple
 
 import numpy as np
+from sklearn.metrics import roc_auc_score
 
 _PREDICTION_THRESHOLD: float = 0.5
-_DEFAULT_ECE_BINS: int = 10
+_SINGLE_CLASS_AUC_DEFAULT: float = 0.5
 
 
 class UtilityMetrics(NamedTuple):
@@ -29,6 +29,18 @@ class UtilityMetrics(NamedTuple):
     test_accuracy: float
     f1: float
     ece: float
+
+
+def auc_score(scores: np.ndarray, labels: np.ndarray) -> float:
+    """ROC-AUC for binary labels ordered by `scores` (higher ⇒ class 1).
+
+    Returns 0.5 when only one class is present in `labels` (sklearn
+    would otherwise raise ValueError). Used by both MIA attacks to
+    compute privacy AUC.
+    """
+    if len(np.unique(labels)) < 2:
+        return _SINGLE_CLASS_AUC_DEFAULT
+    return float(roc_auc_score(labels, scores))
 
 
 def accuracy(y_true: np.ndarray, y_pred_prob: np.ndarray) -> float:

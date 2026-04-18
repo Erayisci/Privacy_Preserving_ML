@@ -22,7 +22,6 @@ from privacy_ml.attacks.shokri import (
 )
 from privacy_ml.attacks.yeom import (
     YeomAttackResult,
-    _auc_from_scores,
     attack as yeom_attack,
     binary_cross_entropy,
 )
@@ -119,29 +118,6 @@ def test_yeom_overfit_auc_is_high() -> None:
     y_true, y_pred, member_mask = _build_overfit_scenario(seed=2)
     result = yeom_attack(y_true, y_pred, member_mask)
     assert result.attack_auc >= 0.90
-
-
-# --- AUC helper ---
-
-
-def test_auc_returns_half_on_single_class() -> None:
-    scores = np.array([0.1, 0.2, 0.3, 0.4])
-    labels = np.array([1, 1, 1, 1])
-    assert _auc_from_scores(scores, labels) == 0.5
-
-
-def test_auc_is_one_on_perfect_separation() -> None:
-    scores = np.array([0.1, 0.2, 0.9, 0.95])
-    labels = np.array([0, 0, 1, 1])
-    auc = _auc_from_scores(scores, labels)
-    assert auc == pytest.approx(1.0)
-
-
-def test_auc_is_zero_on_reversed_separation() -> None:
-    scores = np.array([0.9, 0.95, 0.1, 0.2])
-    labels = np.array([0, 0, 1, 1])
-    auc = _auc_from_scores(scores, labels)
-    assert auc == pytest.approx(0.0)
 
 
 # --- Shokri attack (framework-free bits) ---

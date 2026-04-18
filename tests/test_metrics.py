@@ -13,6 +13,7 @@ from privacy_ml.data import PNEUMONIA_LABEL
 from privacy_ml.metrics import (
     UtilityMetrics,
     accuracy,
+    auc_score,
     compute_utility_metrics,
     expected_calibration_error,
     f1_score_binary,
@@ -84,6 +85,32 @@ def test_ece_is_in_unit_interval() -> None:
     y_pred = rng.uniform(0.0, 1.0, size=100)
     ece = expected_calibration_error(y_true, y_pred, n_bins=_ECE_BINS)
     assert 0.0 <= ece <= 1.0
+
+
+def test_auc_returns_half_on_single_class() -> None:
+    scores = np.array([0.1, 0.2, 0.3, 0.4])
+    labels = np.array([1, 1, 1, 1])
+    assert auc_score(scores, labels) == 0.5
+
+
+def test_auc_is_one_on_perfect_separation() -> None:
+    scores = np.array([0.1, 0.2, 0.9, 0.95])
+    labels = np.array([0, 0, 1, 1])
+    assert auc_score(scores, labels) == pytest.approx(1.0)
+
+
+def test_auc_is_zero_on_reversed_separation() -> None:
+    scores = np.array([0.9, 0.95, 0.1, 0.2])
+    labels = np.array([0, 0, 1, 1])
+    assert auc_score(scores, labels) == pytest.approx(0.0)
+
+
+def test_auc_handles_tied_scores() -> None:
+    # Two tied scores at 0.5, one class per side of the tie.
+    # sklearn averages ranks; expected AUC = 0.5 (no separation signal).
+    scores = np.array([0.5, 0.5, 0.5, 0.5])
+    labels = np.array([0, 0, 1, 1])
+    assert auc_score(scores, labels) == pytest.approx(0.5)
 
 
 def test_compute_utility_metrics_bundles_three_values() -> None:

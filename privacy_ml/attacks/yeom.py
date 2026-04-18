@@ -3,7 +3,7 @@
 Idea: a victim model typically assigns lower loss to samples in its
 training set than to unseen samples. The attacker picks a threshold on
 loss (or equivalently, on per-sample confidence) and predicts
-"member" iff loss < threshold.
+"member" iff loss ≤ threshold.
 
 No shadow models required; this is the cheapest MIA variant. Zero
 extra training time — the attacker only queries the already-trained
@@ -18,6 +18,8 @@ from __future__ import annotations
 from typing import NamedTuple
 
 import numpy as np
+
+from privacy_ml.metrics import auc_score
 
 _BCE_EPSILON: float = 1e-7
 
@@ -43,23 +45,6 @@ def binary_cross_entropy(
     return -(
         y_true * np.log(clipped) + (1.0 - y_true) * np.log(1.0 - clipped)
     )
-
-
-def _auc_from_scores(scores: np.ndarray, labels: np.ndarray) -> float:
-    """ROC-AUC for binary labels by score. Higher score ⇒ more likely class 1.
-
-    Uses the rank formula (Mann-Whitney U) so no sklearn dependency here.
-    """
-    if len(np.unique(labels)) < 2:
-        return 0.5
-    order = np.argsort(scores, kind="mergesort")
-    ranks = np.empty_like(order, dtype=np.float64)
-    ranks[order] = np.arange(1, len(scores) + 1)
-    n_pos = float(np.sum(labels == 1))
-    n_neg = float(np.sum(labels == 0))
-    sum_ranks_pos = float(np.sum(ranks[labels == 1]))
-    u = sum_ranks_pos - n_pos * (n_pos + 1.0) / 2.0
-    return u / (n_pos * n_neg)
 
 
 def attack(
@@ -103,7 +88,7 @@ def attack(
 
     # AUC uses the continuous "member score" = -loss (higher = more member-like).
     member_score = -losses
-    auc = _auc_from_scores(member_score, member_mask_bool.astype(int))
+    auc = auc_score(member_score, member_mask_bool.astype(int))
 
     return YeomAttackResult(
         attack_accuracy=best_accuracy,

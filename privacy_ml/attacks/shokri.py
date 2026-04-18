@@ -29,7 +29,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .yeom import _auc_from_scores
+from privacy_ml.metrics import auc_score
 
 
 class AttackTrainingData(NamedTuple):
@@ -133,7 +133,7 @@ def evaluate_attack(
     predicted_member = attack_scores >= 0.5
     member_bool = member_mask.astype(bool)
     accuracy = float(np.mean(predicted_member == member_bool))
-    auc = _auc_from_scores(attack_scores, member_bool.astype(int))
+    auc = auc_score(attack_scores, member_bool.astype(int))
     return ShokriAttackResult(
         attack_accuracy=accuracy,
         attack_auc=float(auc),
