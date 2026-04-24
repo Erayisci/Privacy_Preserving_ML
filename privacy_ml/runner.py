@@ -436,6 +436,10 @@ def _run_shokri_attack(
             _fit_embedding_ppts(E_train, embedding_ppts)
             E_train_priv = _apply_embedding_ppts(E_train, embedding_ppts)
             E_holdout_priv = _apply_embedding_ppts(E_holdout, embedding_ppts)
+        else:
+            E_train_priv = E_train
+            E_holdout_priv = E_holdout
+        if config.dp_enabled:
             head = _train_head_on_embeddings(
                 E_train_priv,
                 y[shadow_split.train_indices],
@@ -443,8 +447,6 @@ def _run_shokri_attack(
                 shadow_training_seed,
             )
         else:
-            E_train_priv = E_train
-            E_holdout_priv = E_holdout
             head = baseline_head
 
         probs_train = np.asarray(
@@ -586,6 +588,10 @@ def run_single_config(
         _fit_embedding_ppts(E_members, embedding_ppts)
         E_members_priv = _apply_embedding_ppts(E_members, embedding_ppts)
         E_nonmem_priv = _apply_embedding_ppts(E_nonmem, embedding_ppts)
+    else:
+        E_members_priv = E_members
+        E_nonmem_priv = E_nonmem
+    if config.dp_enabled:
         head = _train_head_on_embeddings(
             E_members_priv,
             y[splits.victim_members],
@@ -593,8 +599,6 @@ def run_single_config(
             config.seed,
         )
     else:
-        E_members_priv = E_members
-        E_nonmem_priv = E_nonmem
         head = baseline_head
 
     inference_start = time.perf_counter()
