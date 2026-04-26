@@ -156,6 +156,9 @@ class RunResult:
     utility: UtilityResult
     privacy: PrivacyResult
     reconstruction: Optional[ReconstructionResult]
+    reconstruction_smpc_single_server: Optional[ReconstructionResult]
+    reconstruction_mean_image_baseline: Optional[ReconstructionResult]
+    attacker_view_audit: Optional[dict]
     efficiency: EfficiencyResult
     encoder_hash_id: str
     timestamp: str
@@ -486,8 +489,8 @@ def _run_shokri_attack(
 def _run_reconstruction_attack(
     X_members: np.ndarray,
     X_nonmembers: np.ndarray,
-    E_members_priv: np.ndarray,
-    E_nonmem_priv: np.ndarray,
+    E_members_attacker: np.ndarray,
+    E_nonmem_attacker: np.ndarray,
     epochs: int,
     seed: int,
 ) -> ReconstructionResult:
@@ -497,28 +500,102 @@ def _run_reconstruction_attack(
     — we simulate this by using victim_members as the decoder's training data
     and measuring reconstruction quality on victim_nonmembers (unseen).
 
+    `E_members_attacker` / `E_nonmem_attacker` are whatever embedding-shaped
+    vectors the attacker actually observes. In the default threat model this
+    is the full (privatized) embedding. Under SMPC with a single corrupted
+    server, this is just that server's additive share — a uniform-random
+    vector that reveals nothing about the true embedding.
+
     The returned metrics are averaged across victim_nonmembers. Ground truth
     is the ORIGINAL (un-privatized) image so that high MSE / low PSNR / low
     SSIM indicate successful defense.
     """
     decoder = build_decoder(
-        embedding_dim=E_members_priv.shape[-1],
+        embedding_dim=E_members_attacker.shape[-1],
         img_size=X_members.shape[1],
         channels=X_members.shape[-1],
         name="recon_decoder",
     )
     train_decoder(
         decoder=decoder,
-        embeddings=E_members_priv,
+        embeddings=E_members_attacker,
         images=X_members,
         epochs=epochs,
         batch_size=DECODER_BATCH_SIZE,
         seed=seed,
     )
     reconstructed = np.asarray(
-        decoder.predict(E_nonmem_priv, verbose=0), dtype=np.float32
+        decoder.predict(E_nonmem_attacker, verbose=0), dtype=np.float32
     )
     return compute_reconstruction_metrics(X_nonmembers, reconstructed)
+
+
+def _mean_image_baseline(
+    X_members: np.ndarray, X_nonmembers: np.ndarray
+) -> ReconstructionResult:
+    """No-info baseline: predict the per-pixel mean image of the training set.
+
+    This is the best a decoder can do when the attacker view is independent
+    of the embedding (e.g. a single-server SMPC share). It bounds how close
+    the single-server attack can get to "useless"; the closer the SMPC
+    single-server metrics sit to this baseline, the stronger the defense.
+    """
+    mean_image = np.mean(X_members, axis=0, keepdims=True).astype(np.float32)
+    reconstructed = np.broadcast_to(mean_image, X_nonmembers.shape).astype(
+        np.float32
+    )
+    return compute_reconstruction_metrics(X_nonmembers, reconstructed)
+
+
+def _attacker_view_audit(
+    E_true: np.ndarray, E_attacker: np.ndarray, sample_dims: int = 8
+) -> dict:
+    """Quantitative proof that the attacker's view is uncorrelated with the embedding.
+
+    Returns per-coordinate stats and a Pearson correlation between the true
+    embedding and the attacker's view (flattened over batch x dim). For a
+    valid additive secret share, mean(view) ≈ 0, std(view) ≈ 1, and
+    |corr(view, emb)| ≈ 0 (information-theoretic independence).
+    """
+    E_true = np.asarray(E_true, dtype=np.float64)
+    E_attacker = np.asarray(E_attacker, dtype=np.float64)
+    flat_true = E_true.reshape(-1)
+    flat_view = E_attacker.reshape(-1)
+    if flat_true.size > 1 and flat_view.std() > 0 and flat_true.std() > 0:
+        pearson = float(
+            np.corrcoef(flat_true, flat_view)[0, 1]
+        )
+    else:
+        pearson = 0.0
+    diff_norm = float(np.linalg.norm(flat_view - flat_true))
+    view_norm = float(np.linalg.norm(flat_view))
+    true_norm = float(np.linalg.norm(flat_true))
+    sample = {
+        "true_embedding_first_row_first_dims": [
+            float(v) for v in E_true[0, :sample_dims]
+        ],
+        "attacker_view_first_row_first_dims": [
+            float(v) for v in E_attacker[0, :sample_dims]
+        ],
+    }
+    return {
+        "n_samples": int(E_true.shape[0]),
+        "embedding_dim": int(E_true.shape[-1]),
+        "true_embedding_mean": float(flat_true.mean()),
+        "true_embedding_std": float(flat_true.std()),
+        "attacker_view_mean": float(flat_view.mean()),
+        "attacker_view_std": float(flat_view.std()),
+        "pearson_corr_view_vs_true": pearson,
+        "l2_distance_view_to_true": diff_norm,
+        "l2_norm_view": view_norm,
+        "l2_norm_true": true_norm,
+        "interpretation": (
+            "If pearson_corr ≈ 0 and attacker_view_mean/std match a unit "
+            "Gaussian, the attacker's view is statistically independent of "
+            "the true embedding under the non-collusion assumption."
+        ),
+        "sample": sample,
+    }
 
 
 # --- Main orchestrator ---
@@ -666,21 +743,66 @@ def run_single_config(
         )
 
     reconstruction_result = None
+    reconstruction_single_server = None
+    reconstruction_mean_image = None
+    attacker_view_audit = None
     if config.run_reconstruction:
         reconstruction_result = _run_reconstruction_attack(
             X_members=X[splits.victim_members],
             X_nonmembers=X[splits.victim_nonmembers],
-            E_members_priv=E_members_priv,
-            E_nonmem_priv=E_nonmem_priv,
+            E_members_attacker=E_members_priv,
+            E_nonmem_attacker=E_nonmem_priv,
             epochs=DECODER_EPOCHS,
             seed=config.seed + 2000,
         )
+        reconstruction_mean_image = _mean_image_baseline(
+            X_members=X[splits.victim_members],
+            X_nonmembers=X[splits.victim_nonmembers],
+        )
+        if config.smpc_enabled:
+            from .ppt.smpc import SecretShareSMPC
+
+            single_server_smpc = SecretShareSMPC(
+                n_shares=config.smpc_shares, seed=config.seed + 3000
+            )
+            E_members_share = single_server_smpc.secret_share(E_members_priv)[0]
+            E_nonmem_share = single_server_smpc.secret_share(E_nonmem_priv)[0]
+            attacker_view_audit = _attacker_view_audit(
+                E_true=E_nonmem_priv, E_attacker=E_nonmem_share
+            )
+            print(
+                "[SMPC single-server attacker view audit] "
+                f"corr(view, emb)={attacker_view_audit['pearson_corr_view_vs_true']:+.4f} "
+                f"view_mean={attacker_view_audit['attacker_view_mean']:+.4f} "
+                f"view_std={attacker_view_audit['attacker_view_std']:.4f} "
+                f"emb_mean={attacker_view_audit['true_embedding_mean']:+.4f} "
+                f"emb_std={attacker_view_audit['true_embedding_std']:.4f}"
+            )
+            print(
+                "  emb[0,:8]  = "
+                + str(attacker_view_audit["sample"]["true_embedding_first_row_first_dims"])
+            )
+            print(
+                "  view[0,:8] = "
+                + str(attacker_view_audit["sample"]["attacker_view_first_row_first_dims"])
+            )
+            reconstruction_single_server = _run_reconstruction_attack(
+                X_members=X[splits.victim_members],
+                X_nonmembers=X[splits.victim_nonmembers],
+                E_members_attacker=E_members_share,
+                E_nonmem_attacker=E_nonmem_share,
+                epochs=DECODER_EPOCHS,
+                seed=config.seed + 4000,
+            )
 
     return RunResult(
         config=config,
         utility=utility,
         privacy=PrivacyResult(yeom=yeom_result, shokri=shokri_result),
         reconstruction=reconstruction_result,
+        reconstruction_smpc_single_server=reconstruction_single_server,
+        reconstruction_mean_image_baseline=reconstruction_mean_image,
+        attacker_view_audit=attacker_view_audit,
         efficiency=EfficiencyResult(
             train_latency_seconds=float(train_latency),
             inference_latency_ms_per_query=float(inference_latency_ms),
@@ -736,6 +858,24 @@ def _run_result_to_jsonable(result: RunResult) -> dict:
             "ssim": result.reconstruction.ssim,
         }
     )
+    reconstruction_single_server_dict = (
+        None
+        if result.reconstruction_smpc_single_server is None
+        else {
+            "mse": result.reconstruction_smpc_single_server.mse,
+            "psnr": result.reconstruction_smpc_single_server.psnr,
+            "ssim": result.reconstruction_smpc_single_server.ssim,
+        }
+    )
+    reconstruction_mean_image_dict = (
+        None
+        if result.reconstruction_mean_image_baseline is None
+        else {
+            "mse": result.reconstruction_mean_image_baseline.mse,
+            "psnr": result.reconstruction_mean_image_baseline.psnr,
+            "ssim": result.reconstruction_mean_image_baseline.ssim,
+        }
+    )
     return {
         "tag": result.config.tag,
         "config": config_dict,
@@ -743,6 +883,9 @@ def _run_result_to_jsonable(result: RunResult) -> dict:
         "utility": result.utility._asdict(),
         "privacy": privacy_dict,
         "reconstruction": reconstruction_dict,
+        "reconstruction_smpc_single_server": reconstruction_single_server_dict,
+        "reconstruction_mean_image_baseline": reconstruction_mean_image_dict,
+        "attacker_view_audit": result.attacker_view_audit,
         "efficiency": result.efficiency._asdict(),
         "timestamp": result.timestamp,
     }
