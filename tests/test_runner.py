@@ -293,6 +293,9 @@ def _make_run_result_fixture() -> RunResult:
             shokri=ShokriAttackResult(attack_accuracy=0.55, attack_auc=0.59),
         ),
         reconstruction=ReconstructionResult(mse=0.05, psnr=13.01, ssim=0.42),
+        reconstruction_smpc_single_server=None,
+        reconstruction_mean_image_baseline=None,
+        attacker_view_audit=None,
         efficiency=EfficiencyResult(
             train_latency_seconds=12.3,
             inference_latency_ms_per_query=0.9,
@@ -314,6 +317,9 @@ def test_run_result_to_jsonable_contains_all_top_level_keys() -> None:
         "utility",
         "privacy",
         "reconstruction",
+        "reconstruction_smpc_single_server",
+        "reconstruction_mean_image_baseline",
+        "attacker_view_audit",
         "efficiency",
         "timestamp",
     }
