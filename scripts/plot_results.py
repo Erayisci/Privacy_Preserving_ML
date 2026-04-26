@@ -82,9 +82,17 @@ def plot_utility_privacy(records: Dict[str, dict], out_path: Path) -> None:
     plt.close(fig)
 
 
+def _recon_psnr_threat_consistent(rec: dict) -> float:
+    """Return reconstruction PSNR under the configuration's own threat model:
+    single-server share for SMPC-enabled configs, full embedding otherwise."""
+    if rec["config"].get("smpc_enabled") and rec.get("reconstruction_smpc_single_server"):
+        return rec["reconstruction_smpc_single_server"]["psnr"]
+    return rec["reconstruction"]["psnr"]
+
+
 def plot_reconstruction(records: Dict[str, dict], out_path: Path) -> None:
     tags = ordered_tags(records)
-    psnr = [records[t]["reconstruction"]["psnr"] for t in tags]
+    psnr = [_recon_psnr_threat_consistent(records[t]) for t in tags]
     colors = _bar_colors(tags)
 
     fig, ax = plt.subplots(figsize=(10, 5))
@@ -129,28 +137,46 @@ def plot_pareto(records: Dict[str, dict], out_path: Path) -> None:
     tags = ordered_tags(records)
     test_acc = [records[t]["utility"]["test_accuracy"] for t in tags]
     yeom = [records[t]["privacy"]["yeom"]["attack_accuracy"] for t in tags]
-    colors = _bar_colors(tags)
+    shokri = [records[t]["privacy"]["shokri"]["attack_accuracy"] for t in tags]
+
+    YEOM_COLOR = "#ff7f0e"
+    SHOKRI_COLOR = "#9467bd"
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    for tag, acc, atk, color in zip(tags, test_acc, yeom, colors):
-        ax.scatter(acc, atk, s=160, color=color, edgecolor="black", linewidth=0.8, zorder=3)
-        ax.annotate(tag, (acc, atk), xytext=(7, 4), textcoords="offset points", fontsize=10)
 
-    ax.axhline(0.5, color="gray", linestyle="--", linewidth=0.8,
-               label="Random guess (perfect defense)")
+    def plot_series(values, color):
+        groups: Dict[tuple, dict] = {}
+        for tag, acc, atk in zip(tags, test_acc, values):
+            key = (round(acc, 4), round(atk, 4))
+            if key not in groups:
+                groups[key] = {"tags": [], "acc": acc, "atk": atk}
+            groups[key]["tags"].append(tag)
+        for g in groups.values():
+            ax.scatter(g["acc"], g["atk"], s=160, color=color,
+                       edgecolor="black", linewidth=0.8, zorder=3)
+            label = " / ".join(g["tags"])
+            ax.annotate(label, (g["acc"], g["atk"]), xytext=(8, 5),
+                        textcoords="offset points", fontsize=9)
 
-    ax.set_xlabel("Test accuracy (utility)  →  higher is better")
-    ax.set_ylabel("Yeom MIA accuracy  →  lower is better")
-    ax.set_title("Utility vs Privacy Trade-off (Yeom MIA)")
+    plot_series(yeom, YEOM_COLOR)
+    plot_series(shokri, SHOKRI_COLOR)
+
+    ax.axhline(0.5, color="gray", linestyle="--", linewidth=0.8)
+
+    ax.set_xlabel("Test accuracy (utility)")
+    ax.set_ylabel("MIA accuracy")
     ax.grid(alpha=0.3)
 
     legend_handles = [
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=DP_COLOR,
-                   markeredgecolor="black", markersize=11, label="DP on"),
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=NO_DP_COLOR,
-                   markeredgecolor="black", markersize=11, label="DP off"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=YEOM_COLOR,
+                   markeredgecolor="black", markersize=11, label="Yeom MIA"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=SHOKRI_COLOR,
+                   markeredgecolor="black", markersize=11, label="Shokri MIA"),
     ]
-    ax.legend(handles=legend_handles, loc="upper left", framealpha=0.95)
+    ax.margins(x=0.12, y=0.10)
+    ax.legend(handles=legend_handles, loc="lower left",
+              bbox_to_anchor=(0.0, 1.02), ncol=2,
+              framealpha=0.95, borderaxespad=0.0)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=200)
@@ -168,7 +194,7 @@ def plot_summary_table(records: Dict[str, dict], out_path: Path) -> None:
             f"{r['utility']['f1']:.3f}",
             f"{r['privacy']['yeom']['attack_accuracy']:.3f}",
             f"{r['privacy']['shokri']['attack_accuracy']:.3f}",
-            f"{r['reconstruction']['psnr']:.2f}",
+            f"{_recon_psnr_threat_consistent(r):.2f}",
             f"{r['reconstruction']['ssim']:.3f}",
         ])
 

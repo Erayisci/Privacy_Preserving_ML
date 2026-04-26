@@ -15,7 +15,7 @@
 
 \title{Privacy Preserving ML for X-Ray Images}
 
-\\author{%
+\author{%
 \begin{tabular}{@{}c@{\hspace{2em}}c@{\hspace{2em}}c@{}}
 Eray İşçi & İrem Damla Karagöz & Kemal Onur Özkan \\
 \textit{Computer Engineering Department} & \textit{Computer Engineering Department} & \textit{Computer Engineering Department} \\
@@ -36,7 +36,7 @@ eray.isci@ug.bilkent.edu.tr & damla.karagoz@ug.bilkent.edu.tr & onurozkan@ug.bil
 \maketitle
 
 \begin{abstract}
-Deploying deep learning models for chest X-ray pneumonia classification on third-party cloud infrastructure exposes sensitive patient imagery to membership inference and model-inversion attacks. We propose a split-model architecture where a hospital-side encoder with three convolutional layers produces 128-dimensional embeddings for a lightweight classification head hosted in the cloud. Our study systematically evaluates three privacy-preserving techniques: Differential Privacy (DP) applying Laplace noise to embeddings, Block-wise Image Encryption (BIE) on input images, and Secure Multi-Party Computation (SMPC) via additive secret sharing. We test all eight possible combinations of these methods using the Kaggle chest X-ray pneumonia dataset. Each configuration is subjected to Yeom and Shokri membership inference attacks alongside a decoder-based reconstruction attack. Our findings reveal a significant threat-model mismatch. While image-level (BIE) and transit-level (SMPC) defenses do not alter output confidences and thus fail to prevent membership inference, embedding-level DP successfully reduces reconstruction PSNR by 3.2 dB with a minimal utility loss of 1.7%. We conclude that DP is both necessary and sufficient for reconstruction defense in this split-model regime. Furthermore, BIE and SMPC must be integrated with output-level privacy mechanisms to offer meaningful protection against inference-time adversaries.
+Deploying deep learning models for chest X-ray pneumonia classification on third-party cloud infrastructure exposes sensitive patient imagery to membership inference and model-inversion attacks. We propose a split-model architecture where a hospital-side encoder with three convolutional layers produces 128-dimensional embeddings for a lightweight classification head hosted in the cloud. Our study systematically evaluates three privacy-preserving techniques: Differential Privacy (DP) applying Laplace noise to embeddings, Block-wise Image Encryption (BIE) on input images, and Secure Multi-Party Computation (SMPC) via additive secret sharing. We test all eight possible combinations of these methods using the Kaggle chest X-ray pneumonia dataset. Each configuration is subjected to Yeom and Shokri membership inference attacks alongside a decoder-based reconstruction attack. Each defense is evaluated under its own design threat model: an embedding-leak adversary for DP and BIE, and a single corrupted non-colluding server for SMPC. Under this threat-model-consistent evaluation, two mechanisms succeed at reconstruction. DP reduces reconstruction PSNR by 3.2 dB \emph{without} utility cost; in fact, it yields a $+2.2$ point accuracy gain consistent with noise-induced regularization at $\epsilon=1.0$ and additionally provides a small reduction in Yeom MIA. SMPC drives single-server reconstruction PSNR to $\approx 15.5$ dB, below even the no-information mean-image baseline, with the attacker's view statistically independent of the true embedding (Pearson $r \approx 0.003$). BIE fails at reconstruction because an adversary with auxiliary (embedding, original-image) pairs implicitly learns the permutation; it also slightly amplifies Yeom MIA via increased memorization on permuted inputs. We conclude that defense efficacy is determined by the alignment between the layer at which a mechanism intervenes and the threat model it is evaluated against; stacking mechanisms across mismatched threat models does not compound protection but combining DP and SMPC is justified when both an embedding-leak and a single-server-compromise adversary must be defended simultaneously.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -100,7 +100,7 @@ Nonetheless, the use of SMPC imposes a significant computational and communicati
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{smpc_pipeline.png}
-\caption{Illustration of Secure Multi-Party Computation (SMPC): a client splits a feature representation into complementary shares that are processed collaboratively by non-colluding servers. The figure illustrates the general $n$-party protocol; our implementation specializes this to the 2-party case. Only the final prediction is reconstructed---no individual server observes the full representation.}
+\caption{Illustration of Secure Multi-Party Computation (SMPC): a client splits a feature representation into complementary shares that are processed collaboratively by non-colluding servers. The figure illustrates the general $n$-party protocol; our implementation specializes this to the 2-party case. Only the final prediction is reconstructedno individual server observes the full representation.}
 \label{fig:smpc}
 \end{figure}
 
@@ -109,6 +109,8 @@ Nonetheless, the use of SMPC imposes a significant computational and communicati
 
 \subsection{Split-Model Pipeline}
 We adopt a two-party split-model architecture. The hospital hosts the encoder $E: \mathbb{R}^{150\times150\times 1}\!\to\!\mathbb{R}^{128}$ and retains raw X-ray images; the cloud hosts the classification head $H: \mathbb{R}^{128}\!\to\![0,1]$, which outputs the pneumonia probability. The encoder is a custom three-convolution CNN (conv$_{16}$-conv$_{32}$-conv$_{64}$, each followed by $2{\times}2$ max-pooling) terminated by a $\mathrm{Dense}(128, \mathrm{ReLU})$ layer; the head is a single $\mathrm{Dense}(1, \mathrm{sigmoid})$ unit. We deliberately train the encoder from scratch rather than fine-tuning an ImageNet-pretrained backbone for two reasons: (i) the small-model, small-data regime preserves the generalization gap that membership inference exploits, providing a stronger signal for our privacy evaluation, and (ii) a from-scratch encoder can be retrained on BIE-permuted inputs, whereas a frozen pretrained backbone cannot.
+
+This split is not motivated by computational offloadingin our architecture the encoder dominates inference costbut by the need to construct an explicit \emph{trust boundary} that makes inference-time privacy mechanisms meaningful to evaluate. If both encoder and head were colocated at the hospital, no patient-derived value would ever cross a network or be observed by an external party, and there would be no surface on which to apply DP, BIE, or SMPC. If the encoder were placed in the cloud, raw imagery would have to be transmitted, eliminating the privacy problem we set out to study. The two-party split is therefore the minimal configuration that creates a well-defined cloud-side observation point while preserving the regulatory constraint (HIPAA/GDPR data locality) that raw images remain at the hospital. We do not claim this split is the only realistic deployment topology; rather, it is the experimental scaffold that allows us to ask, in a controlled setting, ``given that some inference work must be performed by an external party, what does each privacy-preserving transformation actually buy?'' This framing should be kept in mind when interpreting our results: they characterize the inference-time threat surface of split-model deployments rather than prescribing a specific deployment architecture. In our pipeline, the hospital performs the full end-to-end training (encoder and head jointly) on its local data and then transfers only the trained head weights to the cloud for inference; the cloud never observes training data, embeddings, or labels during the training phase. This avoids a separate training-time leakage channel and lets us isolate inference-time privacy as the object of study.
 
 Each privacy-preserving transformation is applied at a specific layer of the pipeline:
 \begin{itemize}
@@ -122,7 +124,7 @@ Each privacy-preserving transformation is applied at a specific layer of the pip
 
 \paragraph{Membership Inference (black-box)} The adversary can submit X-ray queries to the deployed system and receive only the scalar confidence $H(E(x))$. Given a target image $x^*$, the adversary must decide whether $x^*$ was part of the encoder's training set. We consider two concrete instantiations: the \emph{Yeom threshold} attack \cite{yeom2018}, which compares per-query loss against a learned threshold $\tau$, and the \emph{Shokri shadow-model} attack \cite{shokri2017}, which trains an auxiliary classifier to map confidence vectors to membership labels.
 
-\paragraph{Reconstruction} The adversary intercepts the privatized embedding $E_{\mathrm{priv}}(x^*)$ in transit between hospital and cloud, and additionally holds a small set of auxiliary pairs $\{(E_{\mathrm{priv}}(x_i),\, x_i)\}_{i=1}^{n}$ from other patients (simulating a prior breach, insider leak, or public sub-dataset). The adversary's goal is to recover the \emph{original} image $x^*$---not its BIE-permuted form, which has no medical utility. This is realized by training a decoder $D$ on the auxiliary pairs and applying it to the intercepted embedding.
+\paragraph{Reconstruction} The adversary intercepts the privatized embedding $E_{\mathrm{priv}}(x^*)$ in transit between hospital and cloud, and additionally holds a small set of auxiliary pairs $\{(E_{\mathrm{priv}}(x_i),\, x_i)\}_{i=1}^{n}$ from other patients (simulating a prior breach, insider leak, or public sub-dataset). The adversary's goal is to recover the \emph{original} image $x^*$not its BIE-permuted form, which has no medical utility. This is realized by training a decoder $D$ on the auxiliary pairs and applying it to the intercepted embedding.
 
 Both adversaries are semi-honest: they follow the protocol but attempt to infer additional information from observed data. Neither has access to the encoder's parameters or internal activations.
 
@@ -138,7 +140,7 @@ where $\Delta$ is the $\ell_1$ sensitivity of $E$ (set to $1.0$ under standard c
 
 \paragraph{Block-wise Image Encryption} Each $150{\times}150$ grayscale image is partitioned into a $15{\times}15$ grid of $10{\times}10$ tiles; tiles are permuted according to a deterministic permutation $\pi_k$ derived from key seed $k$. The encoder is retrained end-to-end on BIE-permuted images so that it can specialize to the permuted distribution.
 
-\paragraph{Secure Multi-Party Computation} We implement 2-party additive secret sharing on the embedding: $E_{\mathrm{SMPC}}(x) = (s_1, s_2)$ with $s_1 + s_2 = E(x)$ and $s_1$ drawn uniformly. The head receives the reconstructed embedding; the cryptographic guarantee is that neither share alone reveals $E(x)$.
+\paragraph{Secure Multi-Party Computation} We implement 2-party additive secret sharing on the embedding: $E_{\mathrm{SMPC}}(x) = (s_1, s_2)$ with $s_1 + s_2 = E(x)$ and $s_1$ drawn from a distribution independent of $E(x)$ (a standard Gaussian in our implementation). Each server in the protocol sees only its own share; the head reconstructs the embedding from the two shares before classification. The cryptographic guarantee is that neither share alone reveals any information about $E(x)$ under the non-collusion assumption. We additionally implement, but do not run in the matrix, a full Beaver-triple-based 2-party SMPC protocol (\texttt{SMPCInferenceProtocol} in the codebase) in which the head weights $W$, $b$ are also additively split across servers and the matrix multiplication is performed via Beaver triples generated by the client; we omit this from the matrix only because its inference output is mathematically equal to the standard reconstruct-then-classify pipeline above. To evaluate SMPC under its actual semi-honest single-corrupted-server threat model, we additionally measure reconstruction quality from one server's share alone (Section~\ref{sec:results}).
 
 \subsection{Attack Implementations}
 
@@ -174,10 +176,10 @@ We report three metric families per configuration:
 \section{Results}
 \label{sec:results}
 
-Table~\ref{tab:results} summarizes all eight configurations across the three metric families. Figure~\ref{fig:utilityprivacy} plots utility alongside membership-inference attack accuracy, and Figure~\ref{fig:reconstruction} plots per-configuration reconstruction PSNR.
+Table~\ref{tab:results} summarizes all eight configurations on the Kaggle chest X-ray pneumonia benchmark (seed 42, $\epsilon=1.0$) across utility, MIA, and reconstruction metrics; lower Yeom/Shokri accuracy and lower reconstruction PSNR/SSIM indicate stronger privacy defense. Each defense is evaluated under its own threat model: reconstruction columns for SMPC-enabled configurations report the single-corrupted-server attacker (one server's additive share), as this is the threat model under which SMPC's non-collusion security guarantee is defined; DP-enabled configurations are grouped in the last rows. Figure~\ref{fig:pareto} plots utility alongside both Yeom and Shokri membership-inference attack accuracies, and Figure~\ref{fig:reconstruction} plots per-configuration reconstruction PSNR.
 
 \begin{table*}[htbp]
-\caption{Per-configuration results on the Kaggle chest X-ray pneumonia benchmark (seed 42, $\epsilon=1.0$). Lower Yeom/Shokri accuracy and lower reconstruction PSNR/SSIM indicate stronger privacy defense. Configurations with DP (on embeddings) are highlighted in the last rows.}
+\caption{Per-configuration results across utility, MIA, and reconstruction metrics.}
 \label{tab:results}
 \centering
 \renewcommand{\arraystretch}{1.15}
@@ -187,50 +189,93 @@ Table~\ref{tab:results} summarizes all eight configurations across the three met
 \cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}\cmidrule(lr){9-11}
 \textbf{Configuration} & Test Acc & $F_1$ & ECE & Acc & AUC & Acc & AUC & MSE & PSNR (dB) & SSIM \\
 \midrule
-baseline         & 0.788 & 0.855 & 0.183 & 0.619 & 0.566 & 0.540 & 0.605 & 0.011 & 19.88 & 0.507 \\
-bie-only         & 0.740 & 0.826 & 0.227 & 0.647 & 0.573 & 0.553 & 0.624 & 0.011 & 20.04 & 0.504 \\
-smpc-only        & 0.766 & 0.842 & 0.201 & 0.624 & 0.563 & 0.529 & 0.605 & 0.011 & 19.87 & 0.509 \\
-bie+smpc         & 0.744 & 0.828 & 0.215 & 0.651 & 0.575 & 0.537 & 0.605 & 0.011 & 20.05 & 0.505 \\
+baseline         & 0.723 & 0.818 & 0.241 & 0.640 & 0.563 & 0.533 & 0.590 & 0.012 & 19.63 & 0.503 \\
+bie-only         & 0.729 & 0.821 & 0.249 & 0.652 & 0.571 & 0.528 & 0.613 & 0.011 & 20.06 & 0.509 \\
+smpc-only        & 0.723 & 0.818 & 0.241 & 0.640 & 0.563 & 0.520 & 0.563 & 0.031 & 15.51 & 0.386 \\
+bie+smpc         & 0.729 & 0.821 & 0.249 & 0.652 & 0.571 & 0.539 & 0.613 & 0.031 & 15.49 & 0.387 \\
 \midrule
-dp-only          & 0.771 & 0.844 & 0.194 & 0.614 & 0.570 & 0.519 & 0.598 & 0.024 & 16.57 & 0.424 \\
-dp+bie           & 0.752 & 0.832 & 0.215 & 0.632 & 0.578 & 0.523 & 0.597 & 0.022 & 16.98 & 0.432 \\
-dp+smpc          & 0.771 & 0.844 & 0.194 & 0.614 & 0.570 & 0.518 & 0.596 & 0.024 & 16.63 & 0.423 \\
-all-three        & 0.752 & 0.832 & 0.215 & 0.632 & 0.578 & 0.523 & 0.596 & 0.021 & 17.09 & 0.430 \\
+dp-only          & 0.745 & 0.830 & 0.212 & 0.625 & 0.576 & 0.535 & 0.591 & 0.025 & 16.44 & 0.421 \\
+dp+bie           & 0.747 & 0.830 & 0.231 & 0.635 & 0.580 & 0.516 & 0.594 & 0.021 & 17.15 & 0.433 \\
+dp+smpc          & 0.745 & 0.830 & 0.212 & 0.625 & 0.576 & 0.535 & 0.591 & 0.032 & 15.38 & 0.384 \\
+all-three        & 0.747 & 0.830 & 0.231 & 0.635 & 0.580 & 0.516 & 0.594 & 0.031 & 15.51 & 0.388 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-% \begin{figure}[htbp]
-% \centering
-% \includegraphics[width=\linewidth]{fig_utility_privacy.png}
-% \caption{Utility vs.~membership inference accuracy across PPT configurations. The dashed horizontal line at $0.5$ marks random-guess MIA (perfect privacy). DP-containing configurations produce a small downward shift in Shokri accuracy; BIE-containing configurations \emph{increase} Yeom accuracy relative to baseline.}
-% \label{fig:utilityprivacy}
-% \end{figure}
+Table~\ref{tab:trainmatrix} records which components are (re)trained per configuration. The encoder hash depends only on (BIE, seed, epochs), so BIE changes the input distribution and forces a fresh encoder; the head is retrained from scratch on noisy embeddings whenever DP is enabled, since the baseline head was fit to clean embeddings; SMPC is a transit-layer mechanism and triggers neither retraining, with the head's $W$, $b$ split across servers at inference time only.
 
-% \begin{figure}[htbp]
-% \centering
-% \includegraphics[width=\linewidth]{fig_reconstruction.png}
-% \caption{Reconstruction PSNR per configuration (lower is stronger defense). The result splits cleanly by DP: every DP-enabled configuration drops to $16.6$--$17.1$ dB, while every DP-free configuration stays at $19.9$--$20.1$ dB.}
-% \label{fig:reconstruction}
-% \end{figure}
+\begin{table}[htbp]
+\caption{Components (re)trained per configuration.}
+\label{tab:trainmatrix}
+\centering
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Configuration} & \textbf{Encoder retrain} & \textbf{Head retrain} & \textbf{SMPC at inference} \\
+\midrule
+baseline   &            &            &  \\
+dp-only    &            & on noisy emb. &  \\
+bie-only   & on permuted img. &            &  \\
+smpc-only  &            &            & yes \\
+dp+bie     & on permuted img. & on noisy emb. &  \\
+dp+smpc    &            & on noisy emb. & yes \\
+bie+smpc   & on permuted img. &            & yes \\
+all-three  & on permuted img. & on noisy emb. & yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{fig_pareto.png}
+\caption{Utility vs.~MIA accuracy across PPT configurations. Yeom and Shokri attacks are shown in distinct colors; the dashed line at $0.5$ marks the random-guess MIA baseline.}
+\label{fig:pareto}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{fig_reconstruction.png}
+\caption{Reconstruction PSNR per configuration (lower is stronger defense), with each defense evaluated under its own threat model: SMPC-enabled configurations report the single-corrupted-server attacker.}
+\label{fig:reconstruction}
+\end{figure}
 
 \subsection{Utility}
-Baseline test accuracy is $0.788$. Adding DP alone costs $1.7$ points of accuracy ($0.771$), consistent with a moderate $\epsilon=1.0$ Laplace noise applied post-encoding. BIE incurs the largest isolated utility penalty ($-4.8$ points, $0.740$), reflecting the harder optimization problem of training an encoder on permuted inputs. SMPC alone, being lossless by construction, costs only $2.2$ points---attributable to training stochasticity rather than the mechanism itself. Combined configurations follow the worst-case of their constituents (e.g., dp+bie $= 0.752$, dominated by BIE's structural cost). All eight configurations remain within a $5$-point utility band, satisfying typical clinical-deployment tolerances for a defense study.
+Baseline test accuracy is $0.723$. Two patterns dominate the utility column. \emph{First, DP does not degrade utilityit improves it.} Every DP-enabled configuration sits at $0.745$--$0.747$, a $+2.2$ to $+2.4$ point gain over baseline, with a corresponding ECE reduction (from $0.241$ baseline to $0.212$ for dp-only). At $\epsilon=1.0$ with $\Delta=1.0$, the per-coordinate Laplace scale is small relative to the magnitude of ReLU-activated embeddings, but large enough to act as a stochastic regularizer during head retraininga known phenomenon analogous to dropout or noise injection \cite{ziller}. \emph{Second, SMPC is bit-identical to baseline.} The pairs (baseline, smpc-only), (dp-only, dp+smpc), (bie-only, bie+smpc), and (dp+bie, all-three) collapse onto identical utility numbers (matching to three decimal places on Test Acc / $F_1$ / ECE), confirming the lossless-construction claim: share-then-reconstruct is mathematically a no-op modulo float32 rounding. BIE alone moves accuracy by only $+0.6$ points ($0.729$), well within seed noise; the large BIE utility penalty observed in earlier pilot runs disappears once the encoder is retrained on permuted inputs to convergence. The full eight-configuration utility band is now $0.723$--$0.747$ (2.4 points), comfortably within clinical-deployment tolerances.
 
 \subsection{Membership Inference Defense}
-All configurations produce Yeom attack accuracies in $[0.614, 0.651]$ and Shokri accuracies in $[0.518, 0.553]$. Two unexpected patterns emerge. First, DP provides only a marginal reduction ($-0.005$ on Yeom, $-0.021$ on Shokri) at $\epsilon=1.0$. Second, and counter to the intuition that any defense should help, \emph{every BIE-containing configuration increases Yeom accuracy above the baseline}: bie-only reaches $0.647$ ($+0.028$), and bie+smpc peaks at $0.651$ ($+0.032$). SMPC-only is statistically indistinguishable from baseline, with a $+0.005$ delta well within seed noise.
+All configurations produce Yeom attack accuracies in $[0.625, 0.652]$ and Shokri accuracies in $[0.516, 0.539]$. Three patterns emerge. \emph{First, DP yields a small but consistent Yeom reduction} ($-0.015$ versus baseline; $0.640 \to 0.625$ for dp-only) and is the only mechanism that meaningfully shifts Yeom in the privacy-preserving direction. The Shokri delta is essentially zero ($\pm 0.002$), suggesting the shadow-model attack is dominated by features other than the perturbation we inject at $\epsilon=1.0$. \emph{Second, every BIE-containing configuration sits at the top of the Yeom range}: bie-only and bie+smpc both reach $0.652$ ($+0.012$ above baseline), and the combined dp+bie still lands at $0.635$, eroding the DP-only Yeom gain. \emph{Third, SMPC is exactly compositional}smpc-only matches baseline ($0.640$), dp+smpc matches dp-only ($0.625$), bie+smpc matches bie-only ($0.652$), and all-three matches dp+bie ($0.635$).
 
-These observations have a mechanistic explanation. MIA operates on the scalar output confidence $H(E_{\mathrm{priv}}(x))$. BIE is applied strictly upstream of the encoder, which is then retrained to compensate; the resulting model has \emph{higher} memorization on the permuted victim set (supported by a widened train-test gap visible in the ECE column: $0.227$ vs.~$0.183$ baseline), amplifying rather than attenuating the membership signal. SMPC reconstructs the original embedding inside the cloud before the head; the output confidence is bit-identical to the no-SMPC case modulo floating-point error. DP is the only mechanism that perturbs a quantity downstream of the encoder and upstream of the output, and is correspondingly the only mechanism that produces a consistent (if small) reduction.
+The mechanistic explanation is unchanged from earlier analyses but the new numbers tighten the story. MIA operates on the scalar output confidence $H(E_{\mathrm{priv}}(x))$. BIE is applied strictly upstream of the encoder, which is then retrained to compensate; the resulting model has \emph{higher} memorization on the permuted victim set (visible in the ECE column: $0.249$ vs.~$0.241$ baseline; the gap is small but consistent across all BIE configurations), amplifying rather than attenuating the membership signal. SMPC reconstructs the original embedding inside the cloud before the head; the output confidence is bit-identical to the no-SMPC case modulo floating-point errorwhich is why the four SMPC pairs collapse exactly. DP is the only mechanism that perturbs a quantity downstream of the encoder and upstream of the output, and is correspondingly the only mechanism that produces a consistent reduction in Yeom.
 
 \subsection{Reconstruction Defense}
-In stark contrast to the MIA results, reconstruction PSNR partitions cleanly along a single variable---the presence of DP. All four DP-enabled configurations drop to $16.57$--$17.09$ dB ($-2.8$ to $-3.3$ dB versus baseline), while all four DP-free configurations remain within $\pm 0.2$ dB of baseline ($19.87$--$20.05$ dB). SSIM follows the same split ($0.42$--$0.43$ with DP, $0.50$--$0.51$ without), and MSE doubles under DP ($0.021$--$0.024$ vs.~$0.011$).
+Each defense in the matrix is evaluated against the reconstruction adversary it was \emph{designed} to defeat: DP and BIE against an adversary who observes the (privatized) embedding delivered to the head, and SMPC against an adversary who controls a single non-colluding server and observes only that server's additive share. Under this threat-model-consistent evaluation, reconstruction PSNR partitions cleanly: defense is strong whenever \emph{either} DP or SMPC is enabled, and weak whenever neither is. The two SMPC-without-DP configurations (smpc-only, bie+smpc) reach $15.5$ dB; the two DP-without-SMPC configurations (dp-only, dp+bie) reach $16.4$--$17.2$ dB; the two configurations with both (dp+smpc, all-three) sit at the SMPC level ($15.4$--$15.5$ dB), as the single-server view is the binding constraint. Only the two configurations with neither mechanism (baseline, bie-only) leak heavily at $19.6$--$20.1$ dB.
 
-The failure of BIE in the reconstruction threat model is particularly illuminating. The decoder is trained on $(E_{\mathrm{priv}}(x_i), x_i)$ auxiliary pairs in which $x_i$ is the \emph{original} image, so whatever deterministic permutation BIE applies upstream is absorbed into the decoder's weights during training. BIE's security reduces to the secrecy of $\pi_k$; once the adversary holds even a modest number of auxiliary (embedding, original-image) pairs, $\pi_k$ is \emph{implicitly learned} as part of the inverse mapping. This is a Rosetta-Stone regime: known plaintexts collapse the permutation's hiding power without the attacker ever needing to recover $\pi_k$ explicitly. SMPC is equally inert for reconstruction: the adversary intercepts the recombined embedding at the head's input, which is identical to the non-SMPC case.
+The failure of BIE in the reconstruction threat model is illuminating. The decoder is trained on $(E_{\mathrm{priv}}(x_i), x_i)$ auxiliary pairs in which $x_i$ is the \emph{original} image, so whatever deterministic permutation BIE applies upstream is absorbed into the decoder's weights during training. BIE's security reduces to the secrecy of $\pi_k$; once the adversary holds even a modest number of auxiliary (embedding, original-image) pairs, $\pi_k$ is \emph{implicitly learned} as part of the inverse mapping. This is a Rosetta-Stone regime: known plaintexts collapse the permutation's hiding power without the attacker ever needing to recover $\pi_k$ explicitly.
 
-A subtler interaction is visible among the DP-enabled configurations themselves. DP alone achieves $16.57$ dB PSNR, whereas dp+bie rises to $16.98$ dB and all-three to $17.09$ dB---i.e., \emph{layering BIE on top of DP slightly erodes DP's reconstruction defense} by $\approx 0.4$--$0.5$ dB. Mechanistically, BIE pushes the encoder toward a sharper, more structured embedding geometry (consistent with the ECE widening above); against this sharper geometry a fixed Laplace noise magnitude is proportionally less destructive to the decoder's inverse mapping. SMPC combinations do not exhibit this effect, consistent with its non-interaction.
+\subsubsection{Why SMPC Wins Reconstruction in Its Own Threat Model}
+SMPC's reconstruction defense rests on an information-theoretic property, not a noise budget. In our 2-party additive sharing, the share given to the corrupted server is sampled from a distribution that does not depend on the true embedding $E(x)$. Table~\ref{tab:single_server} verifies this empirically: the Pearson correlation $r$ between the attacker's share and the true embedding $E(x)$a direct empirical proxy for SMPC's information-theoretic independence guaranteeis $\approx 0.003$ across all four SMPC configurations, indistinguishable from zero given the sample size and consistent with the theoretical guarantee of independence under the non-collusion assumption. The single-server (SS) PSNR reproduced from Table~\ref{tab:results} is below the no-information mean-image baseline ($16.92$ dB) for every SMPC configuration, confirming that the single-server attack collapses to less than no-information performance. With the attacker's input thus carrying no signal about $E(x)$, a decoder trained on those shares can only memorize the marginal pixel distribution of its training images. Reconstruction PSNR collapses to $\approx 15.5$ dB\emph{below} the trivial mean-image baseline ($16.92$ dB)because the decoder has fit to spurious correlations in random noise rather than to a useful inverse mapping.
+
+\begin{table}[htbp]
+\caption{Single-server SMPC reconstruction details.}
+\label{tab:single_server}
+\centering
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{lccc}
+\toprule
+\textbf{SMPC config.} & \textbf{SS PSNR} & \textbf{Mean-img PSNR} & \textbf{Pearson $r$} \\
+\midrule
+smpc-only  & 15.51 & 16.92 & 0.003 \\
+dp+smpc    & 15.38 & 16.92 & 0.003 \\
+bie+smpc   & 15.49 & 16.92 & 0.003 \\
+all-three  & 15.51 & 16.92 & 0.004 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A subtler interaction is visible among the DP-only and DP+BIE configurations. DP alone achieves $16.44$ dB PSNR, whereas dp+bie rises to $17.15$ dBi.e., \emph{layering BIE on top of DP erodes DP's reconstruction defense} by $\approx 0.7$ dB. Mechanistically, BIE pushes the encoder toward a sharper, more structured embedding geometry (consistent with the ECE widening above); against this sharper geometry a fixed Laplace noise magnitude is proportionally less destructive to the decoder's inverse mapping. The dp+smpc and all-three configurations do not exhibit this effect because the SMPC threat model dominates, replacing the embedding the attacker sees with a random share long before any embedding-geometry effects can matter.
 
 \subsection{Efficiency}
-Training latency per configuration is in the range $136$--$200$ seconds; inference latency is $0.19$--$0.22$ ms per query; peak memory use during the run is $5.7$--$6.9$ GB. DP adds negligible overhead (noise is elementwise and sampled once per query). BIE adds $\approx 10\%$ to training latency due to per-batch permutation on the image tensor. SMPC's share-split on the 128-dimensional embedding is a single vector subtraction and is not measurable in wall-clock time at this scale.
+Encoder training latency, when not served from cache, is $\approx 22$--$27$ seconds (encoder hash depends on the BIE flag, key, and seed; DP and SMPC do not invalidate the encoder cache, so within a fixed seed only two encoders are trained across the eight configurationsone for BIE on, one for BIE off). Per-configuration head training plus attack execution is dominated by shadow-model training; head retraining on noisy embeddings (DP-enabled configs) adds a fraction of a second. Inference latency is $0.19$--$0.22$ ms per query and is indistinguishable across configurations. SMPC's share-split on the 128-dimensional embedding is a single vector subtraction and is not measurable in wall-clock time at this scale; the full Beaver-triple variant adds $\approx 200$--$500\,\mu$s per inference call but is not used in the matrix runs since its output is bit-identical to the simulation.
 
 \section{Discussion}
 \label{sec:discussion}
@@ -239,15 +284,15 @@ Training latency per configuration is in the range $136$--$200$ seconds; inferen
 The two kinds of attacks target entirely different surfaces of the pipeline. MIA inspects the output confidence, whereas reconstruction inspects the embedding. Every PPT mechanism targets a particular surface of the pipeline, and whether it works depends on whether this surface overlaps with the attack surface.
 
 \begin{itemize}
-  \item \textbf{DP} applies perturbation directly to the embedding. As a result, it influences the head (thus making MIA impossible) and is delivered directly to the adversary without any modification (thus making reconstruction impossible). DP is the only mechanism that works against both attack surfaces.
-  \item \textbf{BIE} applies perturbation directly to the image. The encoder tries to correct the perturbation by training itself again, thus recovering or, as we show, improving the confidence in the output prediction. The security assumptions behind BIE include key secrecy, which fails against the reconstruction adversary.
-  \item \textbf{SMPC} applies perturbation in transit from one share-holder to another one. The reconstructed embedding is still perfect, therefore neither MIA nor reconstruction can observe perturbation in action.
+  \item \textbf{DP} applies perturbation directly to the embedding. As a result, it influences both the head's output (slightly weakening MIA) and the embedding the reconstruction adversary intercepts (substantially weakening reconstruction). DP is effective against both attack surfaces in the same threat modelan embedding-leak adversary.
+  \item \textbf{BIE} applies perturbation directly to the image. The encoder retrains end-to-end to compensate, so the resulting embedding is not meaningfully different from the non-BIE case in either MIA confidence or reconstruction quality; the only second-order effect is a small increase in memorization on permuted inputs, which slightly amplifies Yeom MIA.
+  \item \textbf{SMPC} provides information-theoretic independence between any single server's view and the true embedding. Against its design threat modela single corrupted non-colluding serverSMPC is the strongest reconstruction defense in our matrix (PSNR $\approx 15.5$ dB, below the no-information baseline). Against MIA, SMPC is a no-op: the head reconstructs the embedding before classification, so the output confidence carries no SMPC perturbation.
 \end{itemize}
 
-This discrepancy is captured in Table~\ref{tab:mismatch}. Our point is not that either BIE or SMPC fails to protect data in general; both methods are robust enough to the threat models against which they were designed. In particular, BIE is guaranteed to be resilient to naive eavesdropping attacks at the image level, while SMPC is provably secure under the assumption of observing one share. However, it is the case that neither of these assumptions holds for the adversarial models we consider, and applying either method in such settings would be an illusion of security.
+This taxonomy is summarized in Table~\ref{tab:mismatch}, which pairs each mechanism's intervention layer with its defense outcome on each attack surface under its own threat model (embedding-leak adversary for DP and BIE; single corrupted non-colluding server for SMPC); a mechanism defends an attack only when its threat-model assumptions hold and its intervention layer is downstream ofor coincident withthe attacker's observation point. Our point is not that BIE fails to protect data in general; BIE is provably resilient to naive eavesdropping attacks that observe only the encrypted image and have no auxiliary (embedding, original-image) pairs. However, our reconstruction adversary holds exactly such pairs, so BIE's key-secrecy assumption does not buy useful protection here. SMPC, by contrast, is correctly evaluated against the adversary it was designed fora single corrupted non-colluding serverand the table reflects that match.
 
 \begin{table}[htbp]
-\caption{Defense layer vs.~attack surface. A mechanism can only defend an attack whose observation surface overlaps with its intervention layer.}
+\caption{Defense layer vs.~attack surface.}
 \label{tab:mismatch}
 \centering
 \renewcommand{\arraystretch}{1.2}
@@ -255,29 +300,29 @@ This discrepancy is captured in Table~\ref{tab:mismatch}. Our point is not that 
 \toprule
 \textbf{Mechanism} & \textbf{Layer} & \textbf{MIA defense} & \textbf{Recon.~defense} \\
 \midrule
-DP   & embedding  & weak (yes)       & strong (yes)       \\
-BIE  & image      & negative         & negligible         \\
-SMPC & transit    & none             & none               \\
+DP   & embedding & weak (yes)       & strong (yes)       \\
+BIE  & image     & negative         & negligible         \\
+SMPC & transit   & none             & strong (yes)       \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Practical Implications}
-As far as practical application of our pipeline split model to a practitioner is concerned, the most efficient method of combating adversarial attacks by means of any technique during inference time can be achieved by employing embedding level differential privacy. In this setting, DP directly targets the part of the pipeline that both MIA and reconstruction attacks rely on, making it uniquely effective compared to other single-mechanism defenses.
+The practitioner's choice of defense should be driven by the threat model the deployment actually faces. For a deployment in which the cloud is fully trusted to compute the head but a passive adversary may intercept embeddings in transit or via a leak, embedding-level DP is uniquely effective because it perturbs the same quantity the adversary observes; it is also the only mechanism in our matrix that meaningfully (if modestly) shifts MIA in the privacy-preserving direction. For a deployment that distributes inference across two non-colluding servers, SMPC delivers stronger reconstruction defense than DP under the corresponding single-corrupted-server adversary, while leaving output confidences unchanged and therefore offering no MIA protection. The two defenses thus address disjoint operational risks: DP for embedding-leak adversaries, SMPC for single-server-compromise adversaries. Combining them is sensible if the deployment must guard against both.
 
-BIE and SMPC on the other hand, should be interpreted as complementary tools designed for different threat scenarios rather than as substitutes for output-level privacy. For example, BIE is better suited to defending against straightforward image-level interception, while SMPC is intended to protect against partial information leakage across distributed parties. When applied outside those assumptions, their protective value against inference-time adversaries becomes limited.
+BIE, by contrast, is designed for a different threat model entirelyan adversary who observes only encrypted images and has no auxiliary (embedding, original-image) pairs. In our setting the reconstruction adversary holds exactly such pairs, so BIE's key-secrecy assumption fails and the defense provides no measurable protection. BIE should not be added to the stack in deployments matching our threat model.
 
-Moreover, combining all three mechanisms in a straightforward ``stacked'' configuration does not yield additional protection against either reconstruction or membership inference beyond what DP alone already provides. Instead, it introduces compounded costs in model utility, as reflected in the drop in test accuracy (both dp+bie and the all-three configuration fall to 0.752).
+Stacking, when it does add value (e.g., dp+smpc to cover both adversary types), is not utility-costly: dp+bie and all-three both reach $0.747$ test accuracy, the highest in the matrix, because the noise-induced regularization from DP appears to absorb any optimization friction added by BIE's permuted inputs. The cost of mismatched stacking is thus wasted cryptographic effort, not utility loss.
 
 \subsection{Limitations}
-There are three main limitations in our research that weaken our results. First, the value of $\epsilon = 1.0$ is fixed; the sensitivity analysis could help us better explore the entire tradeoff between privacy and utility and could potentially demonstrate better MIA resistance at lower budgets. Second, the size of our data is relatively small ($5\,856$ images), and the data comes from one source only; the performance of MIA attacks on other data sources might vary, especially for BIE. Third, we use $19.88$ dB PSNR as the starting point for our reconstruction attacks; high-PSNR reconstruction (e.g., above $30$ dB) would highlight the importance of the $3$-dB PSNR drop due to DP more.
+There are several main limitations in our research that bound the generality of our results. First, the value of $\epsilon = 1.0$ is fixed; a sensitivity analysis would help us better explore the tradeoff between privacy and utility and could potentially demonstrate stronger MIA resistance at lower budgets. Second, the size of our data is relatively small ($5\,856$ images) and comes from a single source; the performance of MIA attacks on other data sources might vary, especially for BIE. Third, the reconstruction baseline (no defense) sits at $19.63$ dB; a higher-PSNR baseline (e.g., above $30$ dB) would make DP's $3.2$ dB drop more visually striking. Fourth, SMPC is evaluated under the semi-honest single-corrupted-server threat model that defines its security; we do not separately report the worst-case adversary in which both servers collude or the embedding leaks post-reconstruction (in that worst case, SMPC reduces to a no-op since the head reconstructs the embedding before classification). Finally, our SMPC implementation simulates the protocol within a single process; while this faithfully captures the cryptographic guarantees (the per-server view is sampled from a distribution independent of the true embedding, as confirmed empirically by Pearson $r \approx 0.003$), a fully distributed implementation across two physical servers with Beaver-triple multiplication of additively-shared head weights is implemented in our codebase but not used in the matrix runs because the inference-time output is mathematically identical to the simulation.
 
 \section{Conclusion}
-These transformations (Differential Privacy, Block-wise Image Encryption, and Secure Multi-Party Computation) are evaluated empirically against membership inference and reconstruction attacks on a split-model pneumonia chest X-ray classifier using all eight configurations. The core result is a defense efficacy principle: there is a misspecification mismatch between defense mechanisms and the threat model; embedding-level differential privacy protects against both sides of the attack surface and achieves substantial reconstruction defense ($-3.2$ dB PSNR) and poor MIA defense ($\epsilon=1.0$ with a mere $1.7$ utility reduction); image-level block-wise encryption and transit-level multi-party computation are imperceptible from an inference-time attacker who looks at confidences post-encoder or recombined embeddings, and the former could even make membership attacks worse by facilitating memorization.
+We empirically evaluated three privacy-preserving transformations. Differential Privacy, Block-wise Image Encryption, and Secure Multi-Party Computation against membership inference and reconstruction attacks on a split-model pneumonia chest X-ray classifier across all eight on/off combinations. \emph{Each defense was evaluated under its own threat model:} an embedding-leak adversary for DP and BIE, and a single corrupted non-colluding server for SMPC.
 
-More broadly, these results highlight that the location within the pipeline where a defense is applied is just as important as the defense itself. Mechanisms that operate before or during intermediate stages may offer strong guarantees under their intended assumptions, yet still fail to meaningfully interfere with what an inference-time adversary actually observes. This disconnect explains why BIE and SMPC, despite their theoretical strengths, do not translate into practical protection in our evaluated setting.
+Two defenses succeed at reconstruction, for distinct reasons. DP perturbs the embedding the adversary intercepts and reduces reconstruction PSNR by $3.2$ dB at no utility cost ($+2.2$ point accuracy gain via noise-induced regularization at $\epsilon=1.0$); it additionally produces a small reduction in Yeom MIA. SMPC provides information-theoretic independence between any single server's view and the true embedding (Pearson $r \approx 0.003$), driving single-server reconstruction PSNR to $\approx 15.5$ dB below even the no-information mean-image baseline. BIE, by contrast, fails at reconstruction in our setting because the auxiliary-pair adversary implicitly learns the permutation, and slightly amplifies Yeom MIA by inducing additional memorization on permuted inputs. SMPC is a no-op against MIA because the head reconstructs the embedding before classification.
 
-Those building pipeline defenses using split-model classifiers must pay attention to output-level privacy and recognize that stacking image-level and transit-level defenses is ineffective for defending against inference-time attackers. In practice, prioritizing defenses that directly perturb or constrain the information exposed at the model's outputs is likely to yield more reliable protection than combining multiple mechanisms that act on disconnected parts of the pipeline.
+The overarching lesson is that defense efficacy is determined by the alignment between the layer at which a mechanism intervenes and the threat model under which it is evaluated. DP and SMPC succeed because they are evaluated against the adversaries they were designed for; BIE fails because its key-secrecy assumption does not hold against an adversary with auxiliary pairs. Naively stacking mechanisms across mismatched threat models does not compound protectionit only wastes cryptographic effort. Practitioners deploying split-model medical classifiers should pick the defense whose threat model matches the deployment's actual adversary, and combine defenses only when distinct adversary types must be addressed simultaneously.
 
 \begin{thebibliography}{00}
 
