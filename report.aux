@@ -7,33 +7,31 @@
 \citation{panzade}
 \citation{secureml}
 \citation{panzade}
-\citation{panzade}
 \citation{fredrikson}
 \citation{ziller}
 \citation{ziller}
 \citation{ziller}
 \citation{jarin}
-\citation{jarin}
 \citation{abadi}
 \citation{panzade}
+\citation{ziegler2022}
 \@writefile{toc}{\contentsline {section}{\numberline {II}Literature Review}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Privacy-Preserving Mechanisms}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}1}Differential Privacy (DP)}{2}{}\protected@file@percent }
 \citation{kiya}
-\citation{jarin}
 \citation{secureml}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}2}Block-wise Image Encryption (BIE)}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}3}Secure Multi-Party Computation (SMPC)}{3}{}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Block-wise Image Encryption (BIE) applied to a chest X-ray: the $150{\times }150$ image is partitioned into a $15{\times }15$ grid of $10{\times }10$ tiles that are permuted under a secret key. Local pixel statistics within each tile are preserved, but global anatomical structure is obfuscated.}}{3}{}\protected@file@percent }
 \newlabel{fig:bie}{{1}{3}{}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}3}Secure Multi-Party Computation (SMPC)}{3}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Illustration of Secure Multi-Party Computation (SMPC): a client splits a feature representation into complementary shares that are processed collaboratively by non-colluding servers. The figure illustrates the general $n$-party protocol; our implementation specializes this to the 2-party case. Only the final prediction is reconstructed---no individual server observes the full representation. Figure generated with the assistance of generative AI.}}{3}{}\protected@file@percent }
+\newlabel{fig:smpc}{{2}{3}{}{figure.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {III}System Architecture and Threat Model}{3}{}\protected@file@percent }
 \newlabel{sec:architecture}{{III}{3}{}{section.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Split-Model Pipeline}{3}{}\protected@file@percent }
 \citation{yeom2018}
 \citation{shokri2017}
 \citation{dwork}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Illustration of Secure Multi-Party Computation (SMPC): a client splits a feature representation into complementary shares that are processed collaboratively by non-colluding servers. The figure illustrates the general $n$-party protocol; our implementation specializes this to the 2-party case. Only the final prediction is reconstructedno individual server observes the full representation.}}{4}{}\protected@file@percent }
-\newlabel{fig:smpc}{{2}{4}{}{figure.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Threat Models}{4}{}\protected@file@percent }
 \newlabel{sec:threats}{{\mbox  {III-B}}{4}{}{subsection.3.2}{}}
 \@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {III-B}0a}Membership Inference (black-box)}{4}{}\protected@file@percent }
@@ -46,8 +44,8 @@
 \@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-A}0b}Block-wise Image Encryption}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-A}0c}Secure Multi-Party Computation}{4}{}\protected@file@percent }
 \citation{mooney}
-\citation{mooney}
-\citation{ziller}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Split-model pipeline with BIE, DP, and SMPC intervention points. The hospital trust boundary contains the raw X-ray, the encoder, and the embedding; the cloud sees only privatized values and the head. BIE perturbs the input image, DP adds Laplace noise to the 128-d embedding, and SMPC distributes additive shares of the embedding across two non-colluding servers that reconstruct it inside the cloud before classification. The diagram depicts the general pipeline with all three mechanisms enabled; individual experimental configurations may activate any subset (Section~\ref {sec:results}, Table~\ref {tab:results}).}}{5}{}\protected@file@percent }
+\newlabel{fig:pipeline}{{3}{5}{}{figure.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Attack Implementations}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-B}0a}Yeom threshold}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-B}0b}Shokri shadow-model}{5}{}\protected@file@percent }
@@ -59,42 +57,45 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Metrics}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Results}{5}{}\protected@file@percent }
 \newlabel{sec:results}{{VI}{5}{}{section.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Utility}{5}{}\protected@file@percent }
+\citation{ziller}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Per-configuration results across utility, MIA, and reconstruction metrics.}}{6}{}\protected@file@percent }
 \newlabel{tab:results}{{I}{6}{}{table.1}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Utility vs.~MIA accuracy across PPT configurations. Yeom and Shokri attacks are shown in distinct colors; the dashed line at $0.5$ marks the random-guess MIA baseline.}}{6}{}\protected@file@percent }
-\newlabel{fig:pareto}{{3}{6}{}{figure.3}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Reconstruction PSNR per configuration (lower is stronger defense), with each defense evaluated under its own threat model: SMPC-enabled configurations report the single-corrupted-server attacker.}}{6}{}\protected@file@percent }
-\newlabel{fig:reconstruction}{{4}{6}{}{figure.4}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Components (re)trained per configuration.}}{6}{}\protected@file@percent }
 \newlabel{tab:trainmatrix}{{II}{6}{}{table.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Utility vs.~MIA accuracy across PPT configurations. Yeom and Shokri attacks are shown in distinct colors; the dashed line at $0.5$ marks the random-guess MIA baseline.}}{6}{}\protected@file@percent }
+\newlabel{fig:pareto}{{4}{6}{}{figure.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Utility}{6}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Reconstruction PSNR per configuration (lower is stronger defense), with each defense evaluated under its own threat model: SMPC-enabled configurations report the single-corrupted-server attacker.}}{6}{}\protected@file@percent }
+\newlabel{fig:reconstruction}{{5}{6}{}{figure.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Membership Inference Defense}{6}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Qualitative reconstruction across all eight PPT configurations. Each row shows a held-out chest X-ray (left column) and the decoder's pixel-wise reconstruction under each configuration (each defense evaluated under its own threat model; SMPC columns show the single-corrupted-server view). Configurations without DP or SMPC (\texttt  {baseline}, \texttt  {bie-only}) reproduce coarse anatomical structure visibly; DP-only and dp+bie produce blurred but partially recognizable silhouettes; every SMPC-enabled column collapses to a featureless mean-image, consistent with the information-theoretic independence of the single-server share from $E(x)$.}}{7}{}\protected@file@percent }
+\newlabel{fig:recon_grid}{{6}{7}{}{figure.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Reconstruction Defense}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-C}1}Why SMPC Wins Reconstruction in Its Own Threat Model}{7}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Single-server SMPC reconstruction details.}}{7}{}\protected@file@percent }
-\newlabel{tab:single_server}{{III}{7}{}{table.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Efficiency}{7}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Single-server SMPC reconstruction details.}}{8}{}\protected@file@percent }
+\newlabel{tab:single_server}{{III}{8}{}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Efficiency}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Discussion}{8}{}\protected@file@percent }
 \newlabel{sec:discussion}{{VII}{8}{}{section.7}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Threat-Model Mismatch Hypothesis}{8}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Defense layer vs.~attack surface.}}{8}{}\protected@file@percent }
-\newlabel{tab:mismatch}{{IV}{8}{}{table.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Practical Implications}{8}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Limitations}{8}{}\protected@file@percent }
-\newlabel{sec:limitations}{{\mbox  {VII-C}}{8}{}{subsection.7.3}{}}
 \bibcite{b1}{1}
 \bibcite{panzade}{2}
-\bibcite{ziller}{3}
-\bibcite{jarin}{4}
-\bibcite{abadi}{5}
-\bibcite{dwork}{6}
-\bibcite{fredrikson}{7}
-\bibcite{secureml}{8}
-\bibcite{yeom2018}{9}
-\bibcite{shokri2017}{10}
-\bibcite{kiya}{11}
-\bibcite{mooney}{12}
-\bibcite{ziegler2022}{13}
+\bibcite{secureml}{3}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Defense layer vs.~attack surface.}}{9}{}\protected@file@percent }
+\newlabel{tab:mismatch}{{IV}{9}{}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Limitations}{9}{}\protected@file@percent }
+\newlabel{sec:limitations}{{\mbox  {VII-C}}{9}{}{subsection.7.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{9}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{References}{9}{}\protected@file@percent }
-\gdef \@abspage@last{9}
+\bibcite{fredrikson}{4}
+\bibcite{ziller}{5}
+\bibcite{jarin}{6}
+\bibcite{abadi}{7}
+\bibcite{ziegler2022}{8}
+\bibcite{kiya}{9}
+\bibcite{yeom2018}{10}
+\bibcite{shokri2017}{11}
+\bibcite{dwork}{12}
+\bibcite{mooney}{13}
+\gdef \@abspage@last{10}
