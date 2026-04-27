@@ -162,7 +162,7 @@ where $\Delta$ is the $\ell_1$ sensitivity of $E$, taken as $1.0$ as a working a
 \label{sec:setup}
 
 \subsection{Dataset and Splits}
-We use the publicly available Kaggle \texttt{chest-xray-pneumonia} dataset \cite{mooney}, comprising 5\,856 grayscale chest radiographs labeled NORMAL or PNEUMONIA with an empirical class ratio of $2.70{:}1$ (PNEUMONIA:NORMAL). Rather than IID-pooling all images, we preserve Kaggle's native \texttt{train/}\!/\!\texttt{test/} subdirectory split, which is known to carry a mild distribution shift sufficient to induce a measurable train-test generalization gap \cite{mooney}. Concretely:
+We use the publicly available Kaggle \texttt{chest-xray-pneumonia} dataset \cite{mooney}, comprising 5\,856 grayscale chest radiographs labeled NORMAL or PNEUMONIA with an empirical class ratio of $2.70{:}1$ (PNEUMONIA:NORMAL). Rather than IID-pooling all images, we preserve Kaggle's native \texttt{train/} and \texttt{test/} subdirectory split, which in our experiments carries a mild distribution shift sufficient to induce a measurable train-test generalization gap. Concretely:
 \begin{itemize}
   \item \textbf{victim\_members} (2\,000): stratified subsample of Kaggle \texttt{train/} (5\,216 images);
   \item \textbf{victim\_nonmembers} (624): all of Kaggle \texttt{test/};
