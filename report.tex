@@ -119,6 +119,15 @@ Each privacy-preserving transformation is applied at a specific layer of the pip
   \item \textbf{SMPC} splits the embedding into additive shares that are passed through the head; the shares are recombined inside the cloud.
 \end{itemize}
 
+Figure~\ref{fig:pipeline} summarizes the split-model architecture and the layer at which each privacy-preserving transformation intervenes.
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=\linewidth]{fig_pipeline.png}
+\caption{Split-model pipeline with BIE, DP, and SMPC intervention points. The hospital trust boundary contains the raw X-ray, the encoder, and the embedding; the cloud sees only privatized values and the head. BIE perturbs the input image, DP adds Laplace noise to the 128-d embedding, and SMPC distributes additive shares of the embedding across two non-colluding servers that reconstruct it inside the cloud before classification. The diagram depicts the general pipeline with all three mechanisms enabled; individual experimental configurations may activate any subset (Section~\ref{sec:results}, Table~\ref{tab:results}).}
+\label{fig:pipeline}
+\end{figure*}
+
 \subsection{Threat Models}
 \label{sec:threats}
 
@@ -242,6 +251,13 @@ all-three  & perm.~img. & noisy emb. & \checkmark \\
 \label{fig:reconstruction}
 \end{figure}
 
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=\linewidth]{fig_recon_grid.png}
+\caption{Qualitative reconstruction across all eight PPT configurations. Each row shows a held-out chest X-ray (left column) and the decoder's pixel-wise reconstruction under each configuration (each defense evaluated under its own threat model; SMPC columns show the single-corrupted-server view). Configurations without DP or SMPC (\texttt{baseline}, \texttt{bie-only}) reproduce coarse anatomical structure visibly; DP-only and dp+bie produce blurred but partially recognizable silhouettes; every SMPC-enabled column collapses to a featureless mean-image, consistent with the information-theoretic independence of the single-server share from $E(x)$.}
+\label{fig:recon_grid}
+\end{figure*}
+
 \subsection{Utility}
 Baseline test accuracy is $0.723$. Two patterns dominate the utility column. \emph{First, DP does not degrade utility; it improves it.} Every DP-enabled configuration sits at $0.745$--$0.747$, a $+2.2$ to $+2.4$ point gain over baseline, with a corresponding ECE reduction (from $0.241$ baseline to $0.212$ for dp-only). At $\epsilon=1.0$ with $\Delta=1.0$, the per-coordinate Laplace scale is small relative to the magnitude of ReLU-activated embeddings, but large enough to act as a stochastic regularizer during head retraining, a known phenomenon analogous to dropout or noise injection \cite{ziller}. \emph{Second, SMPC is bit-identical to baseline.} The pairs (baseline, smpc-only), (dp-only, dp+smpc), (bie-only, bie+smpc), and (dp+bie, all-three) collapse onto identical utility numbers (matching to three decimal places on Test Acc / $F_1$ / ECE), confirming the lossless-construction claim: share-then-reconstruct is mathematically a no-op modulo float32 rounding. BIE alone moves accuracy by only $+0.6$ points ($0.729$), well within seed noise; the large BIE utility penalty observed in earlier pilot runs disappears once the encoder is retrained on permuted inputs to convergence. The full eight-configuration utility band is now $0.723$--$0.747$ (2.4 points), comfortably within clinical-deployment tolerances.
 
@@ -251,7 +267,7 @@ All configurations produce Yeom attack accuracies in $[0.625, 0.652]$ and Shokri
 The mechanistic explanation is unchanged from earlier analyses but the new numbers tighten the story. MIA operates on the scalar output confidence $H(E_{\mathrm{priv}}(x))$. BIE is applied strictly upstream of the encoder, which is then retrained to compensate; the resulting model has \emph{higher} memorization on the permuted victim set (visible in the ECE column: bie-only and bie+smpc reach $0.249$ vs.~$0.241$ baseline; the dp+bie and all-three configurations fall back to $0.231$, indicating that DP's regularization absorbs the BIE-induced sharpening), amplifying rather than attenuating the membership signal. SMPC reconstructs the original embedding inside the cloud before the head; the output confidence is bit-identical to the no-SMPC case modulo floating-point error, which is why the four SMPC pairs collapse exactly. DP is the only mechanism that perturbs a quantity downstream of the encoder and upstream of the output, and is correspondingly the only mechanism that produces a consistent reduction in Yeom.
 
 \subsection{Reconstruction Defense}
-Each defense in the matrix is evaluated against the reconstruction adversary it was \emph{designed} to defeat: DP and BIE against an adversary who observes the (privatized) embedding delivered to the head, and SMPC against an adversary who controls a single non-colluding server and observes only that server's additive share. Under this threat-model-consistent evaluation, reconstruction PSNR partitions cleanly: defense is strong whenever \emph{either} DP or SMPC is enabled, and weak whenever neither is. The two SMPC-without-DP configurations (smpc-only, bie+smpc) reach $15.5$ dB; the two DP-without-SMPC configurations (dp-only, dp+bie) reach $16.4$--$17.2$ dB; the two configurations with both (dp+smpc, all-three) sit at the SMPC level ($15.4$--$15.5$ dB), as the single-server view is the binding constraint. Only the two configurations with neither mechanism (baseline, bie-only) leak heavily at $19.6$--$20.1$ dB.
+Each defense in the matrix is evaluated against the reconstruction adversary it was \emph{designed} to defeat: DP and BIE against an adversary who observes the (privatized) embedding delivered to the head, and SMPC against an adversary who controls a single non-colluding server and observes only that server's additive share. Under this threat-model-consistent evaluation, reconstruction PSNR partitions cleanly: defense is strong whenever \emph{either} DP or SMPC is enabled, and weak whenever neither is. The two SMPC-without-DP configurations (smpc-only, bie+smpc) reach $15.5$ dB; the two DP-without-SMPC configurations (dp-only, dp+bie) reach $16.4$--$17.2$ dB; the two configurations with both (dp+smpc, all-three) sit at the SMPC level ($15.4$--$15.5$ dB), as the single-server view is the binding constraint. Only the two configurations with neither mechanism (baseline, bie-only) leak heavily at $19.6$--$20.1$ dB. Figure~\ref{fig:recon_grid} provides a per-configuration qualitative view of the decoder's output and confirms this partitioning visually: anatomical structure is recognizable in baseline and bie-only, partially preserved under DP-only and dp+bie, and fully obliterated whenever SMPC is in the stack.
 
 The failure of BIE in the reconstruction threat model is illuminating. The decoder is trained on $(E_{\mathrm{priv}}(x_i), x_i)$ auxiliary pairs in which $x_i$ is the \emph{original} image, so whatever deterministic permutation BIE applies upstream is absorbed into the decoder's weights during training. BIE's security reduces to the secrecy of $\pi_k$; once the adversary holds even a modest number of auxiliary (embedding, original-image) pairs, $\pi_k$ is \emph{implicitly learned} as part of the inverse mapping. This is a Rosetta-Stone regime: known plaintexts collapse the permutation's hiding power without the attacker ever needing to recover $\pi_k$ explicitly.
 
