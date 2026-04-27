@@ -95,7 +95,7 @@ def plot_reconstruction(records: Dict[str, dict], out_path: Path) -> None:
     psnr = [_recon_psnr_threat_consistent(records[t]) for t in tags]
     colors = _bar_colors(tags)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 5.6))
     bars = ax.bar(tags, psnr, color=colors, edgecolor="black", linewidth=0.5)
 
     baseline_psnr = records["baseline"]["reconstruction"]["psnr"]
@@ -142,7 +142,7 @@ def plot_pareto(records: Dict[str, dict], out_path: Path) -> None:
     YEOM_COLOR = "#ff7f0e"
     SHOKRI_COLOR = "#9467bd"
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(9, 6))
 
     def plot_series(values, color):
         groups: Dict[tuple, dict] = {}
@@ -155,8 +155,11 @@ def plot_pareto(records: Dict[str, dict], out_path: Path) -> None:
             ax.scatter(g["acc"], g["atk"], s=160, color=color,
                        edgecolor="black", linewidth=0.8, zorder=3)
             label = " / ".join(g["tags"])
-            ax.annotate(label, (g["acc"], g["atk"]), xytext=(8, 5),
-                        textcoords="offset points", fontsize=9)
+            x_off, ha = (8, "left")
+            if g["acc"] >= max(test_acc) - 1e-6:
+                x_off, ha = (-8, "right")
+            ax.annotate(label, (g["acc"], g["atk"]), xytext=(x_off, 5),
+                        textcoords="offset points", fontsize=9, ha=ha)
 
     plot_series(yeom, YEOM_COLOR)
     plot_series(shokri, SHOKRI_COLOR)
@@ -173,13 +176,13 @@ def plot_pareto(records: Dict[str, dict], out_path: Path) -> None:
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=SHOKRI_COLOR,
                    markeredgecolor="black", markersize=11, label="Shokri MIA"),
     ]
-    ax.margins(x=0.12, y=0.10)
+    ax.margins(x=0.15, y=0.12)
     ax.legend(handles=legend_handles, loc="lower left",
               bbox_to_anchor=(0.0, 1.02), ncol=2,
               framealpha=0.95, borderaxespad=0.0)
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=200)
+    fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
